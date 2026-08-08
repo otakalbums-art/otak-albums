@@ -32,6 +32,7 @@ export default function GalleryPage() {
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [filter, setFilter] = useState<"all" | "favorites">("all");
   const [isLive, setIsLive] = useState(false);
+  const [openPhotoId, setOpenPhotoId] = useState<string | null>(null);
 
   function refetch() {
     return fetch("/api/photos")
@@ -47,7 +48,19 @@ export default function GalleryPage() {
       })
       .then((data) => {
         if (!data) return;
-        setPhotos(data.photos ?? []);
+        // /api/photos видає щоразу НОВИЙ signed URL навіть для тих самих фото
+        // (короткоживучі токени) — якщо просто підмінити весь масив, картинка
+        // під незмінним <PhotoTile> отримує новий src і перезавантажується
+        // заново щопопит (то й було "блимання" кожні кілька секунд). Лишаємо
+        // вже завантажений thumbnailUrl для фото, які вже бачили; is_favorite/
+        // is_selected все одно оновлюємо — раптом змінились з іншого пристрою.
+        setPhotos((prev) => {
+          const known = new Map(prev.map((p) => [p.id, p.thumbnailUrl]));
+          return (data.photos ?? []).map((p: Photo) => ({
+            ...p,
+            thumbnailUrl: known.get(p.id) ?? p.thumbnailUrl,
+          }));
+        });
         setIsLive(true);
       })
       .catch(() => {});
@@ -59,7 +72,17 @@ export default function GalleryPage() {
     return () => clearInterval(id);
   }, []);
 
+  useEffect(() => {
+    if (!openPhotoId) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpenPhotoId(null);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [openPhotoId]);
+
   const visible = filter === "favorites" ? photos.filter((p) => p.is_favorite) : photos;
+  const openPhoto = photos.find((p) => p.id === openPhotoId) ?? null;
 
   async function toggleFavorite(photoId: string) {
     setPhotos((prev) => prev.map((p) => (p.id === photoId ? { ...p, is_favorite: !p.is_favorite } : p)));
@@ -113,6 +136,7 @@ export default function GalleryPage() {
             isSelected={photo.is_selected}
             onToggleFavorite={() => toggleFavorite(photo.id)}
             onToggleSelect={() => toggleSelect(photo.id)}
+            onOpen={() => setOpenPhotoId(photo.id)}
           />
         ))}
       </div>
@@ -127,6 +151,41 @@ export default function GalleryPage() {
         Показані лише файли формату <b>.jpeg</b> — фільтрація за типом застосовується автоматично
         під час завантаження на сервер.
       </p>
+
+      {openPhoto && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4"
+          onClick={() => setOpenPhotoId(null)}
+        >
+          <button
+            onClick={() => setOpenPhotoId(null)}
+            className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-xl text-white hover:bg-white/20"
+            aria-label="Закрити"
+          >
+            ✕
+          </button>
+
+          <img
+            src={openPhoto.thumbnailUrl}
+            alt={openPhoto.filename}
+            onClick={(e) => e.stopPropagation()}
+            className="max-h-full max-w-full rounded-lg object-contain shadow-2xl"
+          />
+
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="absolute bottom-6 left-1/2 flex -translate-x-1/2 items-center gap-3 rounded-full bg-black/50 px-4 py-2.5 backdrop-blur-sm"
+          >
+            <span className="font-mono text-xs text-white/80">{openPhoto.filename}</span>
+            <button
+              onClick={() => toggleFavorite(openPhoto.id)}
+              className={`text-sm font-bold ${openPhoto.is_favorite ? "text-white" : "text-white/60"}`}
+            >
+              {openPhoto.is_favorite ? "♥ В обраному" : "♡ В обране"}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
