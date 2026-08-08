@@ -1,12 +1,11 @@
-import { Card, Button, StatusChip } from "@otak/ui";
-import { createSupabaseServerClient } from "@otak/supabase";
+import { Card, StatusChip } from "@otak/ui";
+import { createSupabaseServerClient } from "@otak/supabase/server";
+import { CreateClassForm } from "./create-class-form";
 
 /**
- * Список класів + генерація реферального посилання при створенні папки класу.
- * Реальне створення (POST /api/admin/classes) має:
- *   1) вставити рядок у `classes` з унікальним referral_code (nanoid),
- *   2) створити базову структуру підпапок у Storage за шаблоном обраного album_type,
- *   3) повернути посилання для надсилання відповідальній особі класу.
+ * Список класів + створення нової "папки класу" (POST /api/classes) —
+ * генерує унікальний referral_code; реальна структура підпапок у Storage
+ * не потребує попереднього створення, див. коментар у app/api/classes/route.ts.
  */
 export default async function ClassesPage() {
   const supabase = createSupabaseServerClient();
@@ -14,6 +13,9 @@ export default async function ClassesPage() {
     .from("classes")
     .select("id, name, referral_code, status, schools(name), photos(id)")
     .order("created_at", { ascending: false });
+
+  const { data: schools } = await supabase.from("schools").select("id, name").order("name");
+  const { data: albumTypes } = await supabase.from("album_types").select("id, name").order("name");
 
   return (
     <div className="grid gap-4 md:grid-cols-2">
@@ -25,9 +27,7 @@ export default async function ClassesPage() {
         }
         menu={false}
       >
-        <div className="mb-3 flex justify-end">
-          <Button size="sm" className="w-auto">+ Створити папку класу</Button>
-        </div>
+        <CreateClassForm schools={schools ?? []} albumTypes={albumTypes ?? []} />
         <table className="w-full text-[13px]">
           <thead>
             <tr className="border-b-[1.5px] border-line text-left text-[11px] font-bold text-ink-soft">

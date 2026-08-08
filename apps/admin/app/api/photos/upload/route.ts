@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { randomUUID } from "crypto";
-import { createSupabaseServerClient, createSupabaseServiceRoleClient } from "@otak/supabase";
+import { createSupabaseServiceRoleClient } from "@otak/supabase/server";
+import { requireAdmin } from "@/lib/require-admin";
 
 const ALLOWED_CATEGORIES = ["portrait", "group", "ceremony", "personal", "uncategorized"] as const;
 type Category = (typeof ALLOWED_CATEGORIES)[number];
@@ -15,15 +16,8 @@ type Category = (typeof ALLOWED_CATEGORIES)[number];
  * цей route handler, за аналогією з student-facing API, див. docs/auth-strategy.md).
  */
 export async function POST(req: Request) {
-  const supabase = createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) return NextResponse.json({ error: "Не авторизовано" }, { status: 401 });
-
-  const { data: admin } = await supabase.from("admin_users").select("id").eq("id", user.id).maybeSingle();
-  if (!admin) return NextResponse.json({ error: "Доступ заборонено" }, { status: 403 });
+  const user = await requireAdmin();
+  if (!user) return NextResponse.json({ error: "Доступ заборонено" }, { status: 403 });
 
   const formData = await req.formData();
   const classId = formData.get("classId")?.toString();

@@ -8,6 +8,7 @@ type Photo = { id: string; filename: string; is_selected: boolean };
 /** Крок 2: з "Обраного" учень остаточно відзначає фото для друку в альбомі. */
 export default function AlbumSelectionPage() {
   const [favorites, setFavorites] = useState<Photo[]>([]);
+  const [confirmMessage, setConfirmMessage] = useState<{ type: "ok" | "error"; text: string } | null>(null);
 
   useEffect(() => {
     fetch("/api/photos?favorites=1")
@@ -44,11 +45,23 @@ export default function AlbumSelectionPage() {
         <Button
           className="mt-2"
           onClick={async () => {
-            await fetch("/api/album-selection/confirm", { method: "POST" });
+            setConfirmMessage(null);
+            const res = await fetch("/api/album-selection/confirm", { method: "POST" });
+            const data = await res.json();
+            setConfirmMessage(
+              res.ok
+                ? { type: "ok", text: `Відбір підтверджено: ${data.selectedCount} фото для альбому.` }
+                : { type: "error", text: data.error ?? "Не вдалося підтвердити відбір." }
+            );
           }}
         >
           Підтвердити відбір для альбому
         </Button>
+        {confirmMessage && (
+          <p className={`mt-2 text-xs font-semibold ${confirmMessage.type === "ok" ? "text-ok" : "text-warn"}`}>
+            {confirmMessage.text}
+          </p>
+        )}
       </Card>
     </div>
   );
