@@ -35,8 +35,18 @@ export default function GalleryPage() {
 
   function refetch() {
     return fetch("/api/photos")
-      .then((r) => r.json())
+      .then((r) => {
+        // Сесія протухла/недійсна (напр. новий логін з того самого акаунту
+        // деінде перезаписує session_token — він один на учня) -> на логін,
+        // а не мовчки показувати порожню галерею без жодного пояснення.
+        if (r.status === 401) {
+          window.location.href = "/login";
+          return null;
+        }
+        return r.json();
+      })
       .then((data) => {
+        if (!data) return;
         setPhotos(data.photos ?? []);
         setIsLive(true);
       })
