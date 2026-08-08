@@ -10,6 +10,7 @@ export const metadata: Metadata = {
 const NAV = [
   { href: "/", label: "Дашборд" },
   { href: "/classes", label: "Класи та папки" },
+  { href: "/ftp-import", label: "Прийом з камер (Wi-Fi)" },
   { href: "/album-types", label: "Типи альбомів" },
   { href: "/mom-links", label: "Для мам" },
   { href: "/backup", label: "Бекап-сервер" },

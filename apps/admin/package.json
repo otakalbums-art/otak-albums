@@ -7,11 +7,15 @@
     "build": "next build",
     "start": "next start -p 3001",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "ftp:start": "node scripts/ftp-ingest.mjs"
   },
   "dependencies": {
     "@otak/supabase": "workspace:*",
     "@otak/ui": "workspace:*",
+    "@supabase/supabase-js": "^2.45.4",
+    "chokidar": "^3.6.0",
+    "ftp-srv": "^4.6.3",
     "next": "14.2.5",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
