@@ -1,29 +1,67 @@
 import { Card, Donut } from "@otak/ui";
-import { createSupabaseServerClient } from "@otak/supabase";
+import { createSupabaseServerClient } from "@otak/supabase/server";
+
+const PALETTE = ["#460464", "#8C57A8", "#C6A3D6", "#1FAA59", "#E14F4F", "#8A8E98"];
+
+const CATEGORY_LABELS: Record<string, string> = {
+  portrait: "Портрети",
+  group: "Групові",
+  ceremony: "Церемонія",
+  personal: "Персональні",
+  uncategorized: "Без категорії",
+};
 
 /**
  * Дашборд: прогрес відбору фото по класах (у % і в кількості учнів),
  * розподіл фото за категоріями, розподіл класів за типами альбомів.
- * Дані підвантажуються server-side через RLS-захищений admin client
- * (адмін автентифікований у Supabase Auth, is_admin() = true).
+ * "studentsDone" — учень, що зробив хоч один album_selections запис (у схемі
+ * немає окремого прапорця "підтверджено", див. коментар у
+ * apps/client/app/api/album-selection/confirm/route.ts).
  */
 export default async function DashboardPage() {
   const supabase = createSupabaseServerClient();
 
   const { data: classes } = await supabase
     .from("classes")
-    .select("id, name, schools(name), students(id)")
+    .select("id, name, schools(name), album_types(name), students(id, album_selections(id))")
     .order("name");
 
-  // TODO: замінити на реальний агрегований запит (RPC або view) —
-  // тут спрощено для каркасу.
-  const classProgress =
-    classes?.map((c: any) => ({
+  const classProgress = (classes ?? []).map((c: any) => {
+    const studentsTotal = c.students?.length ?? 0;
+    const studentsDone = (c.students ?? []).filter((s: any) => (s.album_selections?.length ?? 0) > 0).length;
+    return {
       name: `${c.name}, ${c.schools?.name ?? ""}`,
-      studentsTotal: c.students?.length ?? 0,
-      studentsDone: 0,
-      percent: 0,
-    })) ?? [];
+      albumType: c.album_types?.name ?? "Без типу",
+      studentsTotal,
+      studentsDone,
+      percent: studentsTotal ? Math.round((studentsDone / studentsTotal) * 100) : 0,
+    };
+  });
+
+  const totalStudents = classProgress.reduce((s, c) => s + c.studentsTotal, 0);
+  const totalDone = classProgress.reduce((s, c) => s + c.studentsDone, 0);
+  const avgPercent = totalStudents ? Math.round((totalDone / totalStudents) * 100) : 0;
+
+  const { data: photoRows } = await supabase.from("photos").select("category");
+  const categoryCounts = (photoRows ?? []).reduce((acc: Record<string, number>, p: any) => {
+    acc[p.category] = (acc[p.category] ?? 0) + 1;
+    return acc;
+  }, {});
+  const categorySegments = Object.entries(categoryCounts).map(([key, value], i) => ({
+    label: CATEGORY_LABELS[key] ?? key,
+    value: value as number,
+    color: PALETTE[i % PALETTE.length],
+  }));
+
+  const albumTypeCounts = classProgress.reduce((acc: Record<string, number>, c) => {
+    acc[c.albumType] = (acc[c.albumType] ?? 0) + 1;
+    return acc;
+  }, {});
+  const albumTypeSegments = Object.entries(albumTypeCounts).map(([label, value], i) => ({
+    label,
+    value: value as number,
+    color: PALETTE[i % PALETTE.length],
+  }));
 
   return (
     <div>
@@ -33,13 +71,13 @@ export default async function DashboardPage() {
           <div className="text-xs font-semibold text-ink-soft">Активних класів</div>
         </Card>
         <Card menu={false}>
-          <div className="text-[30px] font-extrabold text-purple-deep">
-            {classProgress.reduce((s, c) => s + c.studentsTotal, 0)}
-          </div>
+          <div className="text-[30px] font-extrabold text-purple-deep">{totalStudents}</div>
           <div className="text-xs font-semibold text-ink-soft">Учнів у роботі</div>
         </Card>
         <Card menu={false}>
-          <div className="text-[30px] font-extrabold text-purple-deep">—</div>
+          <div className="text-[30px] font-extrabold text-purple-deep">
+            {totalStudents ? `${avgPercent}%` : "—"}
+          </div>
           <div className="text-xs font-semibold text-ink-soft">Середній прогрес відбору</div>
         </Card>
       </div>
@@ -65,6 +103,23 @@ export default async function DashboardPage() {
           )}
         </div>
       </Card>
+
+      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+        <Card title="Фото за категоріями" menu={false}>
+          {categorySegments.length > 0 ? (
+            <Donut segments={categorySegments} centerLabel={photoRows?.length ?? 0} />
+          ) : (
+            <p className="text-sm text-ink-soft">Фото ще не завантажені.</p>
+          )}
+        </Card>
+        <Card title="Класи за типами альбомів" menu={false}>
+          {albumTypeSegments.length > 0 ? (
+            <Donut segments={albumTypeSegments} centerLabel={classes?.length ?? 0} />
+          ) : (
+            <p className="text-sm text-ink-soft">Класів ще немає.</p>
+          )}
+        </Card>
+      </div>
     </div>
   );
 }
