@@ -1,4 +1,5 @@
 import { createSupabaseServiceRoleClient } from "@otak/supabase";
+import { PhotoTile } from "@otak/ui";
 import { notFound } from "next/navigation";
 
 /**
@@ -38,7 +39,19 @@ export default async function MomLinkPage({ params }: { params: { token: string 
     );
   }
 
-  // TODO: підвантажити read-only галерею класу (без лайків/відбору — лише перегляд).
+  const { data: photos } = await supabase
+    .from("photos")
+    .select("id, filename, storage_path")
+    .eq("class_id", link.class_id)
+    .eq("file_type", "jpeg")
+    .order("uploaded_at", { ascending: false });
+
+  const paths = (photos ?? []).map((p: any) => p.storage_path);
+  const { data: signedUrls } = paths.length
+    ? await supabase.storage.from("photos").createSignedUrls(paths, 60 * 60)
+    : { data: [] as any[] };
+  const urlByPath = new Map((signedUrls ?? []).map((s: any) => [s.path, s.signedUrl]));
+
   return (
     <div>
       <h1 className="text-lg font-bold">
@@ -48,7 +61,20 @@ export default async function MomLinkPage({ params }: { params: { token: string 
         Публічний перегляд без входу. Активний до{" "}
         {new Date(link.expires_at).toLocaleString("uk-UA")}.
       </p>
-      {/* Галерея read-only рендериться тут (перевикористовує <PhotoTile> без onToggle*) */}
+
+      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {(photos ?? []).map((photo: any) => (
+          <PhotoTile
+            key={photo.id}
+            filename={photo.filename}
+            thumbnailUrl={urlByPath.get(photo.storage_path) as string | undefined}
+          />
+        ))}
+      </div>
+
+      {(photos ?? []).length === 0 && (
+        <p className="mt-6 text-center text-sm text-ink-soft">Фото ще не завантажені.</p>
+      )}
     </div>
   );
 }

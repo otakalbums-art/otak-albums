@@ -2,12 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { PhotoTile } from "@otak/ui";
-import { createSupabaseBrowserClient } from "@otak/supabase";
+import { createSupabaseBrowserClient } from "@otak/supabase/browser";
 
 type Photo = {
   id: string;
   filename: string;
-  storage_path: string;
+  thumbnailUrl?: string;
   is_favorite: boolean;
   is_selected: boolean;
 };
@@ -25,23 +25,24 @@ export default function GalleryPage() {
   const [filter, setFilter] = useState<"all" | "favorites">("all");
   const [isLive, setIsLive] = useState(false);
 
-  useEffect(() => {
-    fetch("/api/photos")
+  function refetch() {
+    return fetch("/api/photos")
       .then((r) => r.json())
       .then((data) => setPhotos(data.photos ?? []))
       .catch(() => {});
+  }
 
-    // Real-time: нові фото з'являються без перезавантаження сторінки.
+  useEffect(() => {
+    refetch();
+
+    // Real-time: сигнал про нове фото -> перезапит /api/photos (там генеруються
+    // signed URLs через service_role, тому саме payload.new використати не можна).
     const supabase = createSupabaseBrowserClient();
     const channel = supabase
       .channel("photos-realtime")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "photos" },
-        (payload) => {
-          setPhotos((prev) => [{ ...(payload.new as any), is_favorite: false, is_selected: false }, ...prev]);
-        }
-      )
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "photos" }, () => {
+        refetch();
+      })
       .subscribe((status) => setIsLive(status === "SUBSCRIBED"));
 
     return () => {
@@ -98,6 +99,7 @@ export default function GalleryPage() {
           <PhotoTile
             key={photo.id}
             filename={photo.filename}
+            thumbnailUrl={photo.thumbnailUrl}
             isFavorite={photo.is_favorite}
             isSelected={photo.is_selected}
             onToggleFavorite={() => toggleFavorite(photo.id)}

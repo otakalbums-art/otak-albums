@@ -35,6 +35,7 @@ export default async function ClassesPage() {
               <th>Фото</th>
               <th>Реф. посилання</th>
               <th>Статус</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
@@ -47,6 +48,11 @@ export default async function ClassesPage() {
                   <StatusChip status={c.status === "active" ? "active" : "off"}>
                     {c.status === "active" ? "Активна" : "Очікує"}
                   </StatusChip>
+                </td>
+                <td>
+                  <a href={`/classes/${c.id}/upload`} className="text-[12px] font-semibold text-purple hover:underline">
+                    Завантажити фото
+                  </a>
                 </td>
               </tr>
             ))}

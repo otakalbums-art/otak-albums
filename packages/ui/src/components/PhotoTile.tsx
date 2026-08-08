@@ -1,3 +1,5 @@
+"use client";
+
 interface PhotoTileProps {
   filename: string;
   thumbnailUrl?: string;

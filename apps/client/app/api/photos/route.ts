@@ -31,11 +31,19 @@ export async function GET(req: Request) {
     .eq("file_type", "jpeg")
     .order("uploaded_at", { ascending: false });
 
+  // Bucket "photos" приватний — прев'ю/повнорозмірні фото віддаються лише
+  // через короткоживучі signed URLs, згенеровані тут service_role клієнтом.
+  const paths = (photos ?? []).map((p: any) => p.storage_path);
+  const { data: signedUrls } = paths.length
+    ? await supabase.storage.from("photos").createSignedUrls(paths, 60 * 60) // 1 год
+    : { data: [] as any[] };
+  const urlByPath = new Map((signedUrls ?? []).map((s: any) => [s.path, s.signedUrl]));
+
   const mapped = (photos ?? [])
     .map((p: any) => ({
       id: p.id,
       filename: p.filename,
-      storage_path: p.storage_path,
+      thumbnailUrl: urlByPath.get(p.storage_path),
       is_favorite: p.favorites?.some((f: any) => f.student_id === student.id),
       is_selected: p.album_selections?.some((s: any) => s.student_id === student.id),
     }))

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { LogoutButton } from "./logout-button";
 
 export const metadata: Metadata = {
   title: "Otak Albums — адмін-панель",
@@ -42,6 +43,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   {item.label}
                 </a>
               ))}
+              <div className="my-1.5 border-t border-line" />
+              <LogoutButton />
             </nav>
             <main>{children}</main>
           </div>
