@@ -1,0 +1,6 @@
+{
+  "name": "@otak/config",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./tailwind-preset.js"
+}
