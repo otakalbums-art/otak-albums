@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Card, Toggle } from "@otak/ui";
-import { createSupabaseBrowserClient } from "@otak/supabase/browser";
 
 type ClassOption = { id: string; name: string; schoolName: string };
 type Creds = { username: string; password: string };
@@ -163,22 +162,33 @@ export function FtpControlPanel({
     localStorage.setItem("ftp-camera-count", String(cameraCount));
   }, [cameraCount]);
 
-  // --- лічильник щойно прийнятих фото (реал-тайм, з моменту відкриття сторінки) ---
+  // --- лічильник щойно прийнятих фото (опитування, з моменту відкриття сторінки) ---
+  // Не Supabase Realtime: RLS для anon закритий навмисно (docs/auth-strategy.md),
+  // а admin-сесія тут не рятує ситуацію універсально — простіше й надійніше
+  // опитувати той самий /api/classes/[id]/photo-count скрізь, тим паче що
+  // затримка в 3с непомітна в контексті фотозйомки.
   const [receivedCount, setReceivedCount] = useState(0);
+  const baselineRef = useRef<number | null>(null);
+
   useEffect(() => {
+    baselineRef.current = null;
     setReceivedCount(0);
     if (!selectedClassId) return;
-    const supabase = createSupabaseBrowserClient();
-    const channel = supabase
-      .channel(`ftp-received-${selectedClassId}`)
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "photos", filter: `class_id=eq.${selectedClassId}` },
-        () => setReceivedCount((n) => n + 1)
-      )
-      .subscribe();
+
+    let cancelled = false;
+    async function poll() {
+      const res = await fetch(`/api/classes/${selectedClassId}/photo-count`);
+      if (!res.ok || cancelled) return;
+      const { count } = await res.json();
+      if (baselineRef.current === null) baselineRef.current = count;
+      setReceivedCount(Math.max(0, count - (baselineRef.current ?? count)));
+    }
+
+    poll();
+    const id = setInterval(poll, 3000);
     return () => {
-      supabase.removeChannel(channel);
+      cancelled = true;
+      clearInterval(id);
     };
   }, [selectedClassId]);
 

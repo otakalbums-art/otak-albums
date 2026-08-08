@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { PhotoTile } from "@otak/ui";
-import { createSupabaseBrowserClient } from "@otak/supabase/browser";
 
 type Photo = {
   id: string;
@@ -12,13 +11,22 @@ type Photo = {
   is_selected: boolean;
 };
 
+const POLL_MS = 4000;
+
 /**
  * Галерея класу. Реалізовано:
  *  - сегментований фільтр Усі/Обране
- *  - real-time підписка на нові фото (Supabase Realtime, таблиця `photos`)
+ *  - періодичне опитування /api/photos, щоб нові фото зʼявлялись без
+ *    ручного оновлення сторінки
  *  - лайк / відбір для альбому пряио на плитці
- * Дані фото завантажуються через /api/photos (route handler з service_role,
- * бо RLS для anon-ролі закритий — див. supabase/migrations/0001_init.sql).
+ *
+ * Чому не Supabase Realtime (postgres_changes): RLS для anon-ролі
+ * навмисно закритий (docs/auth-strategy.md) — учні ходять лише через
+ * service_role-захищені route handlers, ніколи напряму до таблиць. Anon
+ * ключ (той, що використовує браузерний клієнт) через це ніколи не
+ * отримає жодної realtime-події на `photos`, скільки не вмикай publication
+ * — RLS блокує доставку на рівні рядка. Опитування через /api/photos
+ * обходить цю проблему, лишаючись у межах тієї самої моделі безпеки.
  */
 export default function GalleryPage() {
   const [photos, setPhotos] = useState<Photo[]>([]);
@@ -28,26 +36,17 @@ export default function GalleryPage() {
   function refetch() {
     return fetch("/api/photos")
       .then((r) => r.json())
-      .then((data) => setPhotos(data.photos ?? []))
+      .then((data) => {
+        setPhotos(data.photos ?? []);
+        setIsLive(true);
+      })
       .catch(() => {});
   }
 
   useEffect(() => {
     refetch();
-
-    // Real-time: сигнал про нове фото -> перезапит /api/photos (там генеруються
-    // signed URLs через service_role, тому саме payload.new використати не можна).
-    const supabase = createSupabaseBrowserClient();
-    const channel = supabase
-      .channel("photos-realtime")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "photos" }, () => {
-        refetch();
-      })
-      .subscribe((status) => setIsLive(status === "SUBSCRIBED"));
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    const id = setInterval(refetch, POLL_MS);
+    return () => clearInterval(id);
   }, []);
 
   const visible = filter === "favorites" ? photos.filter((p) => p.is_favorite) : photos;
@@ -90,7 +89,7 @@ export default function GalleryPage() {
           }`}
         >
           <span className={`h-1.5 w-1.5 rounded-full ${isLive ? "bg-ok" : "bg-ink-soft"}`} />
-          {isLive ? "Оновлюється у реальному часі" : "Підключення…"}
+          {isLive ? "Оновлюється автоматично" : "Завантаження…"}
         </span>
       </div>
 
