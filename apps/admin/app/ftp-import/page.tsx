@@ -1,4 +1,4 @@
-import { Card, StatusChip } from "@otak/ui";
+import { Card } from "@otak/ui";
 import { createSupabaseServerClient } from "@otak/supabase/server";
 import { ftpCredentialsForClass, lanIps } from "@/lib/ftp-credentials";
 
@@ -64,7 +64,6 @@ export default async function FtpImportPage() {
               <th className="py-2">Клас</th>
               <th>Логін</th>
               <th>Пароль</th>
-              <th>Папка на камері</th>
             </tr>
           </thead>
           <tbody>
@@ -77,7 +76,6 @@ export default async function FtpImportPage() {
                   </td>
                   <td className="font-mono text-[12px]">{cred.username}</td>
                   <td className="font-mono text-[12px]">{cred.password}</td>
-                  <td className="font-mono text-[12px]">/ (корінь)</td>
                 </tr>
               );
             })}
@@ -89,8 +87,41 @@ export default async function FtpImportPage() {
           </p>
         )}
         <p className="mt-3 text-xs text-ink-soft">
-          Кожен клас — окремий FTP-логін, ізольований у своєму корені: камері не треба заходити в
-          підпапки, досить залити знімки в корінь після підключення.
+          Один логін на клас — його вистачає на всі камери цього класу одночасно. Кожна камера
+          підключається тими самими креденшлами.
+        </p>
+      </Card>
+
+      <Card title="Декілька камер в один клас — різні папки" menu={false}>
+        <p className="text-xs text-ink-soft">
+          Щоб кілька камер писали в різні "папки" одного класу — не потрібні окремі логіни:
+          достатньо в налаштуваннях FTP <b>кожної камери окремо</b> вказати іншу{" "}
+          <b>цільову папку (Directory / Target folder)</b>. Назва підпапки визначає категорію
+          фото — той самий список, що й при ручному завантаженні:
+        </p>
+        <table className="mt-2.5 w-full text-[13px]">
+          <thead>
+            <tr className="border-b-[1.5px] border-line text-left text-[11px] font-bold text-ink-soft">
+              <th className="py-2">Папка на камері (Directory)</th>
+              <th>Категорія фото</th>
+            </tr>
+          </thead>
+          <tbody>
+            {[
+              ["/ (не вказувати взагалі)", "Без категорії"],
+              ["/portrait", "Портрети"],
+              ["/group", "Групові"],
+              ["/ceremony", "Церемонія"],
+              ["/personal", "Персональні (без прив'язки до учня — приєднати можна пізніше вручну)"],
+            ].map(([folder, label]) => (
+              <tr key={folder} className="border-b border-line">
+                <td className="py-2 font-mono text-[12px]">{folder}</td>
+                <td>{label}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p className="mt-3 text-xs text-ink-soft">
           Детальні кроки для конкретних камер — <code className="font-mono">docs/camera-ftp-ingest.md</code>.
         </p>
       </Card>

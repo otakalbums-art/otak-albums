@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 /**
- * Локальний приймач фото з Wi-Fi камер (FTP) — MVP-версія: одна спільна
- * "папка" (=FTP-логін) на клас, без поділу за фотоапаратами/категоріями.
+ * Локальний приймач фото з Wi-Fi камер (FTP).
  *
  * Запускати окремо від `pnpm dev`, на тому ж комп'ютері, що й адмінка,
  * поки триває зйомка:  pnpm --filter admin run ftp:start
@@ -10,13 +9,22 @@
  *   1) Піднімає FTP-сервер на локальній мережі — кожен активний клас
  *      отримує окремий логін/пароль (детерміновано виведені з class_id +
  *      FTP_INGEST_SECRET, нічого додатково зберігати в БД не треба).
- *      Камера, підключена з цими креденшлами, бачить лише СВІЙ корінь —
- *      підпапки на боці камери вказувати не треба.
- *   2) Стежить (chokidar) за локальною папкою-приймачем; коли файл
+ *   2) Мультикамерний поділ по папках — БЕЗ окремих логінів на кожну
+ *      камеру: усі камери класу підключаються тим самим логіном, а
+ *      відмінність лише в "цільовій папці" (Directory) у налаштуваннях
+ *      FTP кожної камери. Назва підпапки = категорія фото (той самий
+ *      enum, що й у ручному завантаженні через адмінку):
+ *      portrait / group / ceremony / personal / uncategorized.
+ *      Ці підпапки створюються автоматично при вході; камера, що не
+ *      вказала директорію, пише прямо в корінь -> category="uncategorized".
+ *      "personal" тут без прив'язки до конкретного учня (student_id=null) —
+ *      набирати UUID учня в меню камери нереалістично; прив'язати вручну
+ *      можна пізніше через адмінку.
+ *   3) Стежить (chokidar) за локальною папкою-приймачем; коли файл
  *      дописаний повністю (awaitWriteFinish) і це валідний JPEG —
  *      вивантажує в Supabase Storage bucket "photos" і вставляє рядок
  *      у таблицю `photos` — так само, як POST /api/photos/upload.
- *   3) Учні бачать нове фото миттєво: галерея вже підписана на
+ *   4) Учні бачать нове фото миттєво: галерея вже підписана на
  *      postgres_changes INSERT (apps/client/app/gallery/page.tsx).
  *
  * Дивись docs/camera-ftp-ingest.md — покроково, як налаштувати камеру.
@@ -67,6 +75,9 @@ const PASV_MAX = Number(process.env.FTP_PASV_MAX || 2130);
 
 const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 
+// Мають збігатися з check-constraint `photos.category` у supabase/migrations/0001_init.sql.
+export const CATEGORIES = ["portrait", "group", "ceremony", "personal", "uncategorized"];
+
 // --- креденшли класу (той самий алгоритм, що й на сторінці /ftp-import) ---
 export function ftpCredentialsForClass(classId) {
   const h = createHmac("sha256", FTP_SECRET).update(classId).digest("hex");
@@ -108,6 +119,11 @@ ftpServer.on("login", async ({ username, password }, resolve, reject) => {
 
   const root = path.join(DROP_ROOT, match.id);
   fs.mkdirSync(root, { recursive: true });
+  // Наперед створюємо підпапки-категорії, щоб камера могла в них CWD/STOR,
+  // навіть якщо сама MKD не вміє/не робить.
+  for (const category of CATEGORIES) {
+    fs.mkdirSync(path.join(root, category), { recursive: true });
+  }
   resolve({ root });
 });
 
@@ -116,8 +132,6 @@ ftpServer.on("client-error", ({ context, error }) => {
 });
 
 // --- watcher: коли файл дописаний -> вивантажити в Storage ---
-const ingestedRoot = (classId) => path.join(DROP_ROOT, classId, "_ingested");
-
 async function isJpeg(filePath) {
   const fd = await fs.promises.open(filePath, "r");
   const buf = Buffer.alloc(3);
@@ -138,6 +152,11 @@ async function ingest(filePath) {
     return;
   }
 
+  // segments = [classId, ...можлива категорія-підпапка..., filename]
+  // Камера без вказаної Directory пише прямо в корінь -> segments.length === 2.
+  const maybeCategory = segments.length >= 3 ? segments[1] : null;
+  const category = CATEGORIES.includes(maybeCategory) ? maybeCategory : "uncategorized";
+
   try {
     const { data: klass } = await supabase.from("classes").select("id").eq("id", classId).maybeSingle();
     if (!klass) {
@@ -150,7 +169,7 @@ async function ingest(filePath) {
     }
 
     const bytes = await fs.promises.readFile(filePath);
-    const storagePath = `${classId}/uncategorized/${randomUUID()}-${filename}`;
+    const storagePath = `${classId}/${category}/${randomUUID()}-${filename}`;
 
     const { error: uploadError } = await supabase.storage
       .from("photos")
@@ -162,18 +181,20 @@ async function ingest(filePath) {
       storage_path: storagePath,
       filename,
       file_type: "jpeg",
-      category: "uncategorized",
+      category,
     });
     if (insertError) throw insertError;
 
-    const dest = path.join(ingestedRoot(classId), filename);
+    // _ingested лежить всередині тієї ж категорійної підпапки, щоб два
+    // різні кадри з однаковою назвою з різних категорій не перезаписали одне одного.
+    const dest = path.join(DROP_ROOT, classId, category, "_ingested", filename);
     await fs.promises.mkdir(path.dirname(dest), { recursive: true });
     await fs.promises.rename(filePath, dest);
 
-    console.log(`[ftp-ingest] ✓ ${filename} -> клас ${classId}`);
+    console.log(`[ftp-ingest] ✓ ${filename} -> клас ${classId}, категорія "${category}"`);
   } catch (err) {
     console.error(`[ftp-ingest] ✗ помилка для ${rel}:`, err.message);
-    const dest = path.join(DROP_ROOT, classId, "_errors", filename);
+    const dest = path.join(DROP_ROOT, classId, category, "_errors", filename);
     await fs.promises.mkdir(path.dirname(dest), { recursive: true }).catch(() => {});
     await fs.promises.rename(filePath, dest).catch(() => {});
   }
