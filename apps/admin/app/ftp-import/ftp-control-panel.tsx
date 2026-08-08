@@ -15,6 +15,55 @@ const CATEGORY_SLOTS: { key: string; label: string; emoji: string }[] = [
   { key: "uncategorized", label: "Без категорії", emoji: "📁" },
 ];
 
+const LABELS_STORAGE_KEY = "otak-ftp-category-labels";
+
+/** Емодзі + назва картки з олівцем — клік перемикає в режим редагування, Enter/blur зберігає. */
+function EditableTitle({ emoji, value, onChange }: { emoji: string; value: string; onChange: (next: string) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+
+  useEffect(() => {
+    if (!editing) setDraft(value);
+  }, [value, editing]);
+
+  function save() {
+    const next = draft.trim();
+    if (next) onChange(next);
+    setEditing(false);
+  }
+
+  if (editing) {
+    return (
+      <span className="flex items-center gap-1.5">
+        <span>{emoji}</span>
+        <input
+          autoFocus
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={save}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") save();
+            if (e.key === "Escape") {
+              setDraft(value);
+              setEditing(false);
+            }
+          }}
+          className="w-[140px] rounded-md border border-purple bg-white px-1.5 py-0.5 text-[13.5px] font-bold outline-none"
+        />
+      </span>
+    );
+  }
+
+  return (
+    <button onClick={() => setEditing(true)} className="flex items-center gap-1.5 hover:text-purple">
+      <span>
+        {emoji} {value}
+      </span>
+      <span className="text-[12px] text-ink-soft">✏️</span>
+    </button>
+  );
+}
+
 function CopyField({ label, value }: { label: string; value: string }) {
   const [copied, setCopied] = useState(false);
 
@@ -69,6 +118,30 @@ export function FtpControlPanel({
     await fetch(next ? "/api/ftp/start" : "/api/ftp/stop", { method: "POST" });
     await refreshStatus();
     setBusy(false);
+  }
+
+  // --- перейменування карток категорій (зберігається в браузері) ---
+  const [labels, setLabels] = useState<Record<string, string>>(
+    Object.fromEntries(CATEGORY_SLOTS.map((s) => [s.key, s.label]))
+  );
+
+  useEffect(() => {
+    const saved = localStorage.getItem(LABELS_STORAGE_KEY);
+    if (saved) {
+      try {
+        setLabels((prev) => ({ ...prev, ...JSON.parse(saved) }));
+      } catch {
+        // ігноруємо биті дані в localStorage
+      }
+    }
+  }, []);
+
+  function renameCategory(key: string, next: string) {
+    setLabels((prev) => {
+      const updated = { ...prev, [key]: next };
+      localStorage.setItem(LABELS_STORAGE_KEY, JSON.stringify(updated));
+      return updated;
+    });
   }
 
   // --- вибір класу + кількість камер (запам'ятовуємо в браузері) ---
@@ -209,7 +282,17 @@ export function FtpControlPanel({
 
               <div className="grid gap-3.5 sm:grid-cols-2">
                 {visibleSlots.map((slot) => (
-                  <Card key={slot.key} title={`${slot.emoji} ${slot.label}`} menu={false}>
+                  <Card
+                    key={slot.key}
+                    title={
+                      <EditableTitle
+                        emoji={slot.emoji}
+                        value={labels[slot.key] ?? slot.label}
+                        onChange={(next) => renameCategory(slot.key, next)}
+                      />
+                    }
+                    menu={false}
+                  >
                     <div className="flex flex-col gap-2.5">
                       <CopyField label="Host (адреса сервера)" value={primaryIp ?? "— спершу увімкни прийом —"} />
                       <CopyField label="Порт" value={String(status?.port ?? 2121)} />
