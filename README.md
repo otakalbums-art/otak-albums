@@ -100,3 +100,5 @@ Supabase Studio (перегляд таблиць, редагування дан�
 Кольори й шрифти — у `packages/config/tailwind-preset.js` та
 `packages/ui/src/tokens.ts`. Змінювати треба лише там — обидва застосунки
 підхоплять зміни автоматично.
+
+<!-- trigger: force fresh Vercel deployment after making repo public -->
