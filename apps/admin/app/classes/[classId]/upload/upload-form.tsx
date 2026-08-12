@@ -103,11 +103,11 @@ export function UploadForm({ classId, students }: { classId: string; students: S
           isDragging ? "border-purple bg-purple-pale text-purple-deep" : "border-line text-ink-soft"
         }`}
       >
-        Перетягни JPEG-файли сюди або натисни, щоб обрати
+        Перетягни JPEG або RAW-файли сюди (CR2, CR3, NEF, ARW, RAF, ORF, RW2, DNG…) або натисни, щоб обрати
         <input
           ref={inputRef}
           type="file"
-          accept="image/jpeg"
+          accept="image/jpeg,.jpg,.jpeg,.cr2,.cr3,.nef,.nrw,.arw,.sr2,.raf,.orf,.rw2,.pef,.srw,.x3f,.dng"
           multiple
           className="hidden"
           onChange={(e) => addFiles(e.target.files)}

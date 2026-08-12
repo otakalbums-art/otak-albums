@@ -2,6 +2,12 @@ import { createSupabaseServiceRoleClient } from "@otak/supabase";
 import { PhotoTile } from "@otak/ui";
 import { notFound } from "next/navigation";
 
+// Ця сторінка не викликає cookies()/headers() ніде (сервісний ключ, не
+// студентська сесія), тож без цього Next.js вважав би її статичною —
+// force-dynamic про всяк випадок, хоча справжній фікс кешування застарілих
+// даних supabase-js — у createSupabaseServiceRoleClient (packages/supabase/src/server.ts).
+export const dynamic = "force-dynamic";
+
 /**
  * Публічна сторінка перегляду за "посиланням для мам".
  * Доступ БЕЗ входу за прізвищем/іменем — лише за токеном у URL.

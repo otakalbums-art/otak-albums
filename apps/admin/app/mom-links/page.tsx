@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { Card, Toggle, Button } from "@otak/ui";
+import { ReferralLinkCell } from "../classes/referral-link-cell";
 
 type MomLink = {
   id: string;
+  token: string;
   class_name: string;
   hours: number;
   expires_at: string | null;
@@ -12,6 +14,49 @@ type MomLink = {
 };
 
 type ClassOption = { id: string; name: string };
+
+// Клієнтський застосунок, apps/client/app/mom-link/[token]/page.tsx — публічний
+// перегляд фото класу без входу, лише за токеном у URL.
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+
+/** Термін дії, редагований прямо в рядку — зберігає лише при явному кліку "✓". */
+function HoursCell({ id, hours, onSaved }: { id: string; hours: number; onSaved: () => void }) {
+  const [value, setValue] = useState(String(hours));
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => setValue(String(hours)), [hours]);
+
+  const dirty = value !== String(hours) && Number(value) > 0;
+
+  async function save() {
+    setSaving(true);
+    await fetch(`/api/mom-links/${id}`, { method: "PATCH", body: JSON.stringify({ hours: Number(value) }) });
+    setSaving(false);
+    onSaved();
+  }
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <input
+        type="number"
+        min={1}
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        className="w-14 rounded-md border border-line px-1.5 py-1 font-mono text-xs"
+      />
+      {dirty && (
+        <button
+          onClick={save}
+          disabled={saving}
+          aria-label="Зберегти новий термін дії"
+          className="flex-shrink-0 rounded-[6px] border border-line bg-page px-1.5 py-1 text-[10.5px] font-bold text-purple hover:border-purple"
+        >
+          {saving ? "…" : "✓"}
+        </button>
+      )}
+    </div>
+  );
+}
 
 /**
  * Керування посиланнями для мам: термін дії на клас, локальне вимкнення
@@ -50,6 +95,12 @@ export default function MomLinksPage() {
     await fetch(`/api/mom-links/${id}`, { method: "POST", body: JSON.stringify({ isActive: next }) });
   }
 
+  async function deleteLink(id: string, className: string) {
+    if (!confirm(`Видалити посилання для класу "${className}" остаточно? Стара URL перестане працювати одразу.`)) return;
+    setLinks((prev) => prev.filter((l) => l.id !== id));
+    await fetch(`/api/mom-links/${id}`, { method: "DELETE" });
+  }
+
   async function createLink() {
     if (!newClassId || !newHours) return;
     setCreating(true);
@@ -66,7 +117,7 @@ export default function MomLinksPage() {
       <div className="mb-3 flex items-center justify-between">
         <h3 className="text-[15.5px] font-bold">Посилання для мам</h3>
         <div className="flex items-center gap-2.5">
-          <span className="text-xs font-semibold text-ink-soft">Вимкнути всі глобально</span>
+          <span className="text-xs font-semibold text-ink-soft">Посилання активні глобально</span>
           <Toggle checked={!globalDisabled} onChange={(v) => toggleGlobal(!v)} aria-label="Глобальний перемикач" />
         </div>
       </div>
@@ -105,9 +156,11 @@ export default function MomLinksPage() {
           <thead>
             <tr className="border-b-[1.5px] border-line text-left text-[11px] font-bold text-ink-soft">
               <th className="py-2">Клас</th>
+              <th>Посилання</th>
               <th>Термін дії (год)</th>
               <th>Активне до</th>
-              <th>Локально</th>
+              <th title="Вмикає/вимикає лише це одне посилання, не чіпаючи решту">Це посилання</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
@@ -115,14 +168,24 @@ export default function MomLinksPage() {
               <tr key={l.id} className="border-b border-line">
                 <td className="py-2.5">{l.class_name}</td>
                 <td>
-                  <input
-                    defaultValue={l.hours}
-                    className="w-14 rounded-md border border-line px-1.5 py-1 font-mono text-xs"
-                  />
+                  <ReferralLinkCell url={`${SITE_URL}/mom-link/${l.token}`} />
+                </td>
+                <td>
+                  <HoursCell id={l.id} hours={l.hours} onSaved={refetch} />
                 </td>
                 <td>{l.expires_at ? new Date(l.expires_at).toLocaleString("uk-UA") : "—"}</td>
                 <td>
                   <Toggle checked={l.is_active} onChange={(v) => toggleLocal(l.id, v)} />
+                </td>
+                <td>
+                  <button
+                    onClick={() => deleteLink(l.id, l.class_name)}
+                    aria-label="Видалити посилання"
+                    title="Видалити посилання остаточно"
+                    className="rounded-[6px] border border-line bg-page px-1.5 py-1 text-[10.5px] font-bold text-ink-soft hover:border-red-300 hover:text-red-600"
+                  >
+                    ✕
+                  </button>
                 </td>
               </tr>
             ))}
@@ -130,8 +193,10 @@ export default function MomLinksPage() {
         </table>
       </Card>
       <p className="mt-3 text-xs text-ink-soft">
-        Термін дії посилання задається адміном для кожного класу окремо. Перемикач вимикає
-        доступ достроково — локально для одного класу або глобально для всіх одразу.
+        Термін дії посилання задається адміном для кожного класу окремо. Перемикач «Це
+        посилання» в рядку вимикає достроково лише цей один рядок — інші класи й далі
+        працюють. Перемикач «Посилання активні глобально» вгорі — аварійний рубильник:
+        вимикає одразу геть усі посилання для мам, незалежно від їхнього власного стану.
       </p>
     </div>
   );

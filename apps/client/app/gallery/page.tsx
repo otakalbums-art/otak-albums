@@ -2,13 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { PhotoTile } from "@otak/ui";
+import { redirectToLogin } from "@/lib/session-redirect";
 
 type Photo = {
   id: string;
   filename: string;
   thumbnailUrl?: string;
   is_favorite: boolean;
-  is_selected: boolean;
 };
 
 const POLL_MS = 4000;
@@ -18,7 +18,8 @@ const POLL_MS = 4000;
  *  - сегментований фільтр Усі/Обране
  *  - періодичне опитування /api/photos, щоб нові фото зʼявлялись без
  *    ручного оновлення сторінки
- *  - лайк / відбір для альбому пряио на плитці
+ *  - лайк ★ прямо на плитці; саме формування фото для альбому зі свого
+ *    обраного — окрема сторінка /album (apps/client/app/album/page.tsx)
  *
  * Чому не Supabase Realtime (postgres_changes): RLS для anon-ролі
  * навмисно закритий (docs/auth-strategy.md) — учні ходять лише через
@@ -30,6 +31,7 @@ const POLL_MS = 4000;
  */
 export default function GalleryPage() {
   const [photos, setPhotos] = useState<Photo[]>([]);
+  const [classInfo, setClassInfo] = useState<{ name: string; schoolName: string } | null>(null);
   const [filter, setFilter] = useState<"all" | "favorites">("all");
   const [isLive, setIsLive] = useState(false);
   const [openPhotoId, setOpenPhotoId] = useState<string | null>(null);
@@ -41,7 +43,7 @@ export default function GalleryPage() {
         // деінде перезаписує session_token — він один на учня) -> на логін,
         // а не мовчки показувати порожню галерею без жодного пояснення.
         if (r.status === 401) {
-          window.location.href = "/login";
+          redirectToLogin();
           return null;
         }
         return r.json();
@@ -52,8 +54,8 @@ export default function GalleryPage() {
         // (короткоживучі токени) — якщо просто підмінити весь масив, картинка
         // під незмінним <PhotoTile> отримує новий src і перезавантажується
         // заново щопопит (то й було "блимання" кожні кілька секунд). Лишаємо
-        // вже завантажений thumbnailUrl для фото, які вже бачили; is_favorite/
-        // is_selected все одно оновлюємо — раптом змінились з іншого пристрою.
+        // вже завантажений thumbnailUrl для фото, які вже бачили; is_favorite
+        // все одно оновлюємо — раптом змінилось з іншого пристрою.
         setPhotos((prev) => {
           const known = new Map(prev.map((p) => [p.id, p.thumbnailUrl]));
           return (data.photos ?? []).map((p: Photo) => ({
@@ -61,6 +63,7 @@ export default function GalleryPage() {
             thumbnailUrl: known.get(p.id) ?? p.thumbnailUrl,
           }));
         });
+        if (data.class) setClassInfo(data.class);
         setIsLive(true);
       })
       .catch(() => {});
@@ -89,14 +92,13 @@ export default function GalleryPage() {
     await fetch(`/api/photos/${photoId}/favorite`, { method: "POST" });
   }
 
-  async function toggleSelect(photoId: string) {
-    setPhotos((prev) => prev.map((p) => (p.id === photoId ? { ...p, is_selected: !p.is_selected } : p)));
-    await fetch(`/api/photos/${photoId}/select`, { method: "POST" });
-  }
-
   return (
     <div>
-      <h1 className="mb-1 text-lg font-bold">11-А, ЗОШ №14</h1>
+      <div className="mb-1 flex items-center justify-between gap-3">
+        <h1 className="text-lg font-bold">
+          {classInfo ? `${classInfo.name}, ${classInfo.schoolName}` : "…"}
+        </h1>
+      </div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex gap-[3px] rounded-[9px] border border-line bg-card p-[3px]">
           <button
@@ -133,9 +135,7 @@ export default function GalleryPage() {
             filename={photo.filename}
             thumbnailUrl={photo.thumbnailUrl}
             isFavorite={photo.is_favorite}
-            isSelected={photo.is_selected}
             onToggleFavorite={() => toggleFavorite(photo.id)}
-            onToggleSelect={() => toggleSelect(photo.id)}
             onOpen={() => setOpenPhotoId(photo.id)}
           />
         ))}
@@ -165,11 +165,18 @@ export default function GalleryPage() {
             ✕
           </button>
 
-          <img
-            src={openPhoto.thumbnailUrl}
-            alt={openPhoto.filename}
+          {/* Не <img> навмисно — background-image прибирає найлегшу ціль
+              для "Зберегти зображення як…" з контекстного меню браузера
+              (не 100% захист, повний обхід завжди можливий через
+              devtools/мережу, але прибирає простий шлях в один клік). */}
+          <div
+            role="img"
+            aria-label={openPhoto.filename}
             onClick={(e) => e.stopPropagation()}
-            className="max-h-full max-w-full rounded-lg object-contain shadow-2xl"
+            onContextMenu={(e) => e.preventDefault()}
+            onDragStart={(e) => e.preventDefault()}
+            className="h-[85vh] w-[90vw] select-none rounded-lg bg-contain bg-center bg-no-repeat shadow-2xl [-webkit-touch-callout:none]"
+            style={{ backgroundImage: `url(${openPhoto.thumbnailUrl})` }}
           />
 
           <div

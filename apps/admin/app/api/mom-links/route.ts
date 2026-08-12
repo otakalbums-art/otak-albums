@@ -9,14 +9,14 @@ import { requireAdmin } from "@/lib/require-admin";
  * POST /api/mom-links  — створити нове посилання { classId, hours }.
  */
 export async function GET() {
-  const user = await requireAdmin();
+  const user = await requireAdmin("mom_links");
   if (!user) return NextResponse.json({ error: "Доступ заборонено" }, { status: 403 });
 
   const supabase = createSupabaseServiceRoleClient();
 
   const { data: links } = await supabase
     .from("mom_links")
-    .select("id, expires_at, is_active, created_at, classes(name)")
+    .select("id, token, expires_at, is_active, created_at, classes(name)")
     .order("created_at", { ascending: false });
 
   const { data: settings } = await supabase
@@ -28,6 +28,7 @@ export async function GET() {
 
   const mapped = (links ?? []).map((l: any) => ({
     id: l.id,
+    token: l.token,
     class_name: l.classes?.name ?? "—",
     hours: Math.max(1, Math.round((new Date(l.expires_at).getTime() - new Date(l.created_at).getTime()) / 3_600_000)),
     expires_at: l.expires_at,
@@ -42,7 +43,7 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const user = await requireAdmin();
+  const user = await requireAdmin("mom_links");
   if (!user) return NextResponse.json({ error: "Доступ заборонено" }, { status: 403 });
 
   const { classId, hours } = await req.json();

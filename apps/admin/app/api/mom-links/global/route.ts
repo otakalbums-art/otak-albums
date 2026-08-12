@@ -4,7 +4,7 @@ import { requireAdmin } from "@/lib/require-admin";
 
 /** POST /api/mom-links/global — глобальний перемикач { disabled }. */
 export async function POST(req: Request) {
-  const user = await requireAdmin();
+  const user = await requireAdmin("mom_links");
   if (!user) return NextResponse.json({ error: "Доступ заборонено" }, { status: 403 });
 
   const { disabled } = await req.json();

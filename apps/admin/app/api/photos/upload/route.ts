@@ -2,21 +2,27 @@ import { NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { createSupabaseServiceRoleClient } from "@otak/supabase/server";
 import { requireAdmin } from "@/lib/require-admin";
+import { detectFileType, folderFor } from "@/lib/file-type";
 
 const ALLOWED_CATEGORIES = ["portrait", "group", "ceremony", "personal", "uncategorized"] as const;
 type Category = (typeof ALLOWED_CATEGORIES)[number];
 
 /**
  * POST /api/photos/upload (адмінка)
- * FormData: classId, category, studentId? (обов'язково для category="personal"), files[] (JPEG, до 50MB кожен)
+ * FormData: classId, category, studentId? (обов'язково для category="personal"),
+ * files[] (JPEG або RAW — див. lib/file-type.ts, до 50MB кожен)
  *
  * Авторизація: Supabase Auth-сесія адміна (cookie) -> перевірка admin_users.
  * Сам запис у Storage/БД іде через service_role client (bucket "photos" приватний,
  * без RLS-policy на storage.objects — увесь доступ навмисно проходить лише через
  * цей route handler, за аналогією з student-facing API, див. docs/auth-strategy.md).
+ *
+ * Кожен файл лягає у Storage за шляхом
+ * {classId}/{category}/{JPEG|RAW}/{uuid}-{filename} — підпапку за типом
+ * система обирає сама за розширенням файлу, вручну вказувати не треба.
  */
 export async function POST(req: Request) {
-  const user = await requireAdmin();
+  const user = await requireAdmin("classes");
   if (!user) return NextResponse.json({ error: "Доступ заборонено" }, { status: 403 });
 
   const formData = await req.formData();
@@ -39,18 +45,19 @@ export async function POST(req: Request) {
   const skipped: { filename: string; reason: string }[] = [];
 
   for (const file of files) {
-    const isJpeg = file.type === "image/jpeg" || /\.jpe?g$/i.test(file.name);
-    if (!isJpeg) {
-      skipped.push({ filename: file.name, reason: "не JPEG" });
+    const fileType = detectFileType(file.name);
+    if (!fileType) {
+      skipped.push({ filename: file.name, reason: "непідтримуваний тип файлу (не JPEG і не відомий RAW-формат)" });
       continue;
     }
 
-    const storagePath = `${classId}/${category}/${randomUUID()}-${file.name}`;
+    const storagePath = `${classId}/${category}/${folderFor(fileType)}/${randomUUID()}-${file.name}`;
     const bytes = new Uint8Array(await file.arrayBuffer());
+    const contentType = fileType === "jpeg" ? "image/jpeg" : "application/octet-stream";
 
     const { error: uploadError } = await service.storage
       .from("photos")
-      .upload(storagePath, bytes, { contentType: "image/jpeg", upsert: false });
+      .upload(storagePath, bytes, { contentType, upsert: false });
 
     if (uploadError) {
       skipped.push({ filename: file.name, reason: uploadError.message });
@@ -61,7 +68,7 @@ export async function POST(req: Request) {
       class_id: classId,
       storage_path: storagePath,
       filename: file.name,
-      file_type: "jpeg",
+      file_type: fileType,
       category,
       student_id: category === "personal" ? studentId : null,
     });

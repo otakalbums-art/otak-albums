@@ -21,11 +21,15 @@
  *      набирати UUID учня в меню камери нереалістично; прив'язати вручну
  *      можна пізніше через адмінку.
  *   3) Стежить (chokidar) за локальною папкою-приймачем; коли файл
- *      дописаний повністю (awaitWriteFinish) і це валідний JPEG —
- *      вивантажує в Supabase Storage bucket "photos" і вставляє рядок
- *      у таблицю `photos` — так само, як POST /api/photos/upload.
- *   4) Учні бачать нове фото миттєво: галерея вже підписана на
- *      postgres_changes INSERT (apps/client/app/gallery/page.tsx).
+ *      дописаний повністю (awaitWriteFinish) і це валідний JPEG або
+ *      відомий RAW-формат (CR2/NEF/ARW/... — див. RAW_EXTENSIONS нижче) —
+ *      вивантажує в Supabase Storage bucket "photos" (у підпапку JPEG/ або
+ *      RAW/ усередині категорії — система сама обирає за розширенням) і
+ *      вставляє рядок у таблицю `photos` — так само, як POST /api/photos/upload.
+ *   4) Учні бачать нове JPEG-фото миттєво: галерея вже підписана на
+ *      postgres_changes INSERT (apps/client/app/gallery/page.tsx), і її API
+ *      відфільтровує RAW (apps/client/app/api/photos/route.ts, file_type =
+ *      'jpeg') — RAW доступний лише в адмінці.
  *
  * Дивись docs/camera-ftp-ingest.md — покроково, як налаштувати камеру.
  */
@@ -77,6 +81,41 @@ const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistS
 
 // Мають збігатися з check-constraint `photos.category` у supabase/migrations/0001_init.sql.
 export const CATEGORIES = ["portrait", "group", "ceremony", "personal", "uncategorized"];
+
+// Той самий список, що й у apps/admin/lib/file-type.ts (тут продубльовано —
+// цей файл окремий Node-процес, не проходить через збірку Next.js, тому
+// імпортувати звідти напряму не може, той самий привід, що й
+// ftpCredentialsForClass вище). Тримай синхронними з обома місцями, і з
+// check-constraint `photos_file_type_check` у
+// supabase/migrations/0003_raw_support.sql.
+const RAW_EXTENSIONS = {
+  cr2: "cr2",
+  cr3: "cr3", // Canon
+  nef: "nef",
+  nrw: "nrw", // Nikon
+  arw: "arw",
+  sr2: "sr2", // Sony
+  raf: "raf", // Fujifilm
+  orf: "orf", // Olympus/OM System
+  rw2: "rw2", // Panasonic
+  pef: "pef", // Pentax
+  srw: "srw", // Samsung
+  x3f: "x3f", // Sigma
+  dng: "dng", // Adobe DNG / узагальнений RAW
+};
+
+/** file_type (точне розширення) за іменем файлу, або null якщо не підтримується. */
+function detectFileType(filename) {
+  const ext = filename.split(".").pop()?.toLowerCase();
+  if (!ext) return null;
+  if (ext === "jpg" || ext === "jpeg") return "jpeg";
+  return RAW_EXTENSIONS[ext] ?? null;
+}
+
+/** Назва підпапки в Storage ("JPEG" або "RAW") для даного file_type. */
+function folderFor(fileType) {
+  return fileType === "jpeg" ? "JPEG" : "RAW";
+}
 
 // --- креденшли класу (той самий алгоритм, що й на сторінці /ftp-import) ---
 export function ftpCredentialsForClass(classId) {
@@ -147,8 +186,10 @@ async function ingest(filePath) {
   const filename = path.basename(filePath);
 
   if (segments.includes("_ingested") || segments.includes("_errors")) return;
-  if (!/\.jpe?g$/i.test(filename)) {
-    console.log(`[ftp-ingest] пропущено (не .jpg/.jpeg): ${rel}`);
+
+  const fileType = detectFileType(filename);
+  if (!fileType) {
+    console.log(`[ftp-ingest] пропущено (не JPEG і не відомий RAW-формат): ${rel}`);
     return;
   }
 
@@ -163,24 +204,31 @@ async function ingest(filePath) {
       console.warn(`[ftp-ingest] невідомий class_id у шляху, пропускаю: ${rel}`);
       return;
     }
-    if (!(await isJpeg(filePath))) {
+    // Magic-bytes перевірка робиться лише для JPEG (формат простий і
+    // однаковий у всіх виробників); RAW-формати надто різні між собою
+    // (TIFF-контейнер у більшості, але CR3 — ISO-BMFF, RAF — власний
+    // заголовок) — довіряємо розширенню файлу, як і форма ручного
+    // завантаження в адмінці (app/api/photos/upload/route.ts).
+    if (fileType === "jpeg" && !(await isJpeg(filePath))) {
       console.warn(`[ftp-ingest] файл не є валідним JPEG (за magic bytes), пропускаю: ${rel}`);
       return;
     }
 
     const bytes = await fs.promises.readFile(filePath);
-    const storagePath = `${classId}/${category}/${randomUUID()}-${filename}`;
+    const folder = folderFor(fileType);
+    const storagePath = `${classId}/${category}/${folder}/${randomUUID()}-${filename}`;
+    const contentType = fileType === "jpeg" ? "image/jpeg" : "application/octet-stream";
 
     const { error: uploadError } = await supabase.storage
       .from("photos")
-      .upload(storagePath, bytes, { contentType: "image/jpeg", upsert: false });
+      .upload(storagePath, bytes, { contentType, upsert: false });
     if (uploadError) throw uploadError;
 
     const { error: insertError } = await supabase.from("photos").insert({
       class_id: classId,
       storage_path: storagePath,
       filename,
-      file_type: "jpeg",
+      file_type: fileType,
       category,
     });
     if (insertError) throw insertError;
@@ -191,7 +239,7 @@ async function ingest(filePath) {
     await fs.promises.mkdir(path.dirname(dest), { recursive: true });
     await fs.promises.rename(filePath, dest);
 
-    console.log(`[ftp-ingest] ✓ ${filename} -> клас ${classId}, категорія "${category}"`);
+    console.log(`[ftp-ingest] ✓ ${filename} -> клас ${classId}, категорія "${category}", ${folder} (${fileType})`);
   } catch (err) {
     console.error(`[ftp-ingest] ✗ помилка для ${rel}:`, err.message);
     const dest = path.join(DROP_ROOT, classId, category, "_errors", filename);

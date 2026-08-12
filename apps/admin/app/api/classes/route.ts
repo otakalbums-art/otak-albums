@@ -2,23 +2,10 @@ import { NextResponse } from "next/server";
 import { randomBytes } from "crypto";
 import { createSupabaseServiceRoleClient } from "@otak/supabase/server";
 import { requireAdmin } from "@/lib/require-admin";
-
-// Найпоширеніші українські літери класів (11-А, 9-В...) -> латиниця для referral_code.
-const CYRILLIC_TO_LATIN: Record<string, string> = {
-  а: "a", б: "b", в: "v", г: "h", д: "d", е: "e", є: "ie", ж: "zh", з: "z",
-  и: "y", і: "i", ї: "i", й: "i", к: "k", л: "l", м: "m", н: "n", о: "o",
-  п: "p", р: "r", с: "s", т: "t", у: "u", ф: "f", х: "kh", ц: "ts", ч: "ch",
-  ш: "sh", щ: "shch", ю: "iu", я: "ia", ь: "",
-};
+import { transliterate } from "@/lib/slugify";
 
 function slugify(name: string) {
-  const base = name
-    .toLowerCase()
-    .split("")
-    .map((ch) => CYRILLIC_TO_LATIN[ch] ?? ch)
-    .join("")
-    .replace(/[^a-z0-9]+/g, "")
-    .slice(0, 10);
+  const base = transliterate(name).replace(/[^a-z0-9]+/g, "").slice(0, 10);
   return (base || "clas") + "-" + randomBytes(3).toString("hex");
 }
 
@@ -36,7 +23,7 @@ function slugify(name: string) {
  * косметичного списку назв, без впливу на реальні шляхи файлів.
  */
 export async function POST(req: Request) {
-  const user = await requireAdmin();
+  const user = await requireAdmin("classes");
   if (!user) return NextResponse.json({ error: "Доступ заборонено" }, { status: 403 });
 
   const { schoolId, newSchoolName, albumTypeId, name } = await req.json();

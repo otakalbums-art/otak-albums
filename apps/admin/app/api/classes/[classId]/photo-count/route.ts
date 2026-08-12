@@ -10,7 +10,7 @@ import { requireAdmin } from "@/lib/require-admin";
  * простіше опитувати той самий шлях скрізь, ніж тримати дві різні стратегії).
  */
 export async function GET(req: Request, { params }: { params: { classId: string } }) {
-  const user = await requireAdmin();
+  const user = await requireAdmin("ftp");
   if (!user) return NextResponse.json({ error: "Доступ заборонено" }, { status: 403 });
 
   const supabase = createSupabaseServerClient();

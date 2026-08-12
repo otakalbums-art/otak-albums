@@ -4,7 +4,7 @@ import { ftpStatus } from "@/lib/ftp-process-manager";
 import { lanIps } from "@/lib/ftp-credentials";
 
 export async function GET() {
-  const user = await requireAdmin();
+  const user = await requireAdmin("ftp");
   if (!user) return NextResponse.json({ error: "Доступ заборонено" }, { status: 403 });
 
   return NextResponse.json({
