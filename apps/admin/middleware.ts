@@ -1,4 +1,4 @@
-import { createServerClient, type CookieOptions } from "@supabase/ssr";
+import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { ADMIN_TABS, pathToTab } from "@/lib/admin-tabs";
 
@@ -16,25 +16,35 @@ import { ADMIN_TABS, pathToTab } from "@/lib/admin-tabs";
  * Логін-сторінку й статичні файли пропускаємо без перевірки.
  */
 export async function middleware(req: NextRequest) {
-  const res = NextResponse.next();
+  // Офіційний патерн @supabase/ssr для middleware: res треба перестворювати
+  // всередині setAll (не просто мутувати один раз створений об'єкт), інакше
+  // оновлений (refreshed) access-токен не долетить до відповіді. redirect()
+  // нижче — це ЗАВЖДИ новий Response, тож куки з res туди копіюються вручну
+  // через copyCookies(), інакше тихий refresh сесії губився б на кожному
+  // редіректі цієї функції (а тут майже кожен шлях — редірект).
+  let res = NextResponse.next({ request: req });
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        get(name: string) {
-          return req.cookies.get(name)?.value;
+        getAll() {
+          return req.cookies.getAll();
         },
-        set(name: string, value: string, options: CookieOptions) {
-          res.cookies.set({ name, value, ...options });
-        },
-        remove(name: string, options: CookieOptions) {
-          res.cookies.set({ name, value: "", ...options });
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value }) => req.cookies.set(name, value));
+          res = NextResponse.next({ request: req });
+          cookiesToSet.forEach(({ name, value, options }) => res.cookies.set(name, value, options));
         },
       },
     }
   );
+
+  function copyCookies(target: NextResponse) {
+    res.cookies.getAll().forEach((c) => target.cookies.set(c));
+    return target;
+  }
 
   const {
     data: { user },
@@ -45,7 +55,7 @@ export async function middleware(req: NextRequest) {
   if (!user && !isLoginPage) {
     const url = req.nextUrl.clone();
     url.pathname = "/login";
-    return NextResponse.redirect(url);
+    return copyCookies(NextResponse.redirect(url));
   }
 
   if (!user) return res; // на /login без сесії — нема що перевіряти далі
@@ -61,13 +71,13 @@ export async function middleware(req: NextRequest) {
     if (isLoginPage) return res;
     const url = req.nextUrl.clone();
     url.pathname = "/login";
-    return NextResponse.redirect(url);
+    return copyCookies(NextResponse.redirect(url));
   }
 
   if (isLoginPage) {
     const url = req.nextUrl.clone();
     url.pathname = "/";
-    return NextResponse.redirect(url);
+    return copyCookies(NextResponse.redirect(url));
   }
 
   const role = (admin as any).admin_roles as { is_owner: boolean; tab_keys: string[] } | null;
@@ -81,7 +91,7 @@ export async function middleware(req: NextRequest) {
       const firstAllowedHref = ADMIN_TABS.find((t) => granted.includes(t.key))?.href;
       const url = req.nextUrl.clone();
       url.pathname = firstAllowedHref ?? "/no-access";
-      if (url.pathname !== req.nextUrl.pathname) return NextResponse.redirect(url);
+      if (url.pathname !== req.nextUrl.pathname) return copyCookies(NextResponse.redirect(url));
     }
   }
 

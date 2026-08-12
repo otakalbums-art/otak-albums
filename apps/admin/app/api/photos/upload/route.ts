@@ -68,7 +68,7 @@ export async function POST(req: Request) {
       class_id: classId,
       storage_path: storagePath,
       filename: file.name,
-      file_type: fileType,
+      file_type: fileType as never,
       category,
       student_id: category === "personal" ? studentId : null,
     });

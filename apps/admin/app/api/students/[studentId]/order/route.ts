@@ -68,7 +68,7 @@ export async function PUT(req: Request, { params }: { params: { studentId: strin
   if (status !== "not_ordered" && !student.ordered_at) update.ordered_at = now;
   if (status === "paid" && !student.paid_at) update.paid_at = now;
 
-  const { error } = await service.from("students").update(update).eq("id", params.studentId);
+  const { error } = await service.from("students").update(update as never).eq("id", params.studentId);
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
 
   if (status !== student.order_status) {

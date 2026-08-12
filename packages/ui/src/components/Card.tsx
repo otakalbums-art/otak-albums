@@ -1,6 +1,11 @@
 import { HTMLAttributes, ReactNode } from "react";
 
-interface CardProps extends HTMLAttributes<HTMLDivElement> {
+// Omit<..., "title"> — HTMLAttributes саме має власний title?: string
+// (нативний HTML-атрибут, підказка при наведенні); Card навмисно хоче
+// title як довільний ReactNode (напр. title={null} чи title={<div>...}
+// вживається по всьому коду) — без Omit це конфлікт типів, і не косметичний:
+// ламає production-білд (next build падає на цьому, хоч next dev мовчить).
+interface CardProps extends Omit<HTMLAttributes<HTMLDivElement>, "title"> {
   title?: ReactNode;
   period?: ReactNode;
   menu?: boolean;

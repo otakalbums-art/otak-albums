@@ -50,7 +50,10 @@ export async function POST(req: Request) {
   const { data: klass, error } = await supabase
     .from("classes")
     .insert({
-      school_id: resolvedSchoolId,
+      // resolvedSchoolId завжди задано в цій точці: або прийшло як schoolId,
+      // або щойно створене вище (перевірка на початку функції гарантує
+      // одне з двох) — TS цього по гілках коду не бачить.
+      school_id: resolvedSchoolId!,
       album_type_id: albumTypeId || null,
       name: name.trim(),
       referral_code: referralCode,

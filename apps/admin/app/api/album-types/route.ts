@@ -84,7 +84,7 @@ export async function POST(req: Request) {
   }
 
   if (slotsToInsert.length > 0) {
-    const { error: slotsError } = await service.from("album_type_slots").insert(slotsToInsert);
+    const { error: slotsError } = await service.from("album_type_slots").insert(slotsToInsert as never);
     // Тип альбому вже створений — навіть якщо слоти не вставились, не
     // відкочуємо, просто повідомляємо (адмін завжди може додати слоти
     // вручну на /album-types/[id]/slots).

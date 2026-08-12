@@ -10,10 +10,11 @@
     "./server": "./src/server.ts"
   },
   "dependencies": {
-    "@supabase/ssr": "^0.5.1",
+    "@supabase/ssr": "^0.12.4",
     "@supabase/supabase-js": "^2.45.4"
   },
   "devDependencies": {
+    "next": "14.2.5",
     "typescript": "^5.5.4"
   }
 }

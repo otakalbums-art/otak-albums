@@ -47,7 +47,7 @@ export async function POST(req: Request) {
   const update: Record<string, unknown> = { session_token: sessionToken, session_expires_at: expiresAt.toISOString() };
   if (isFirstLogin) update.first_login_at = new Date().toISOString();
 
-  await supabase.from("students").update(update).eq("id", student.id);
+  await supabase.from("students").update(update as never).eq("id", student.id);
 
   if (isFirstLogin) {
     notifyAdmins(supabase, {

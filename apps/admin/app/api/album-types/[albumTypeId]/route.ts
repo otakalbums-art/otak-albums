@@ -24,7 +24,7 @@ export async function PATCH(req: Request, { params }: { params: { albumTypeId: s
   const service = createSupabaseServiceRoleClient();
   const { data: albumType, error } = await service
     .from("album_types")
-    .update(update)
+    .update(update as never)
     .eq("id", params.albumTypeId)
     .select("*")
     .single();

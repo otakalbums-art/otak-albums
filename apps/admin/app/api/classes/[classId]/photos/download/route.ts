@@ -21,7 +21,13 @@ export async function GET(req: Request, { params }: { params: { classId: string 
 
   const { searchParams } = new URL(req.url);
   const kind = (searchParams.get("kind") ?? "all") as "all" | "jpeg" | "raw";
-  const category = searchParams.get("category") ?? "all";
+  const category = (searchParams.get("category") ?? "all") as
+    | "all"
+    | "portrait"
+    | "group"
+    | "ceremony"
+    | "personal"
+    | "uncategorized";
 
   const service = createSupabaseServiceRoleClient();
 

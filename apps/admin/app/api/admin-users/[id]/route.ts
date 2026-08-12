@@ -54,7 +54,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
   const { data: updated, error } = await supabase
     .from("admin_users")
-    .update(update)
+    .update(update as never)
     .eq("id", params.id)
     .select("*")
     .single();

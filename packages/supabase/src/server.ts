@@ -1,10 +1,19 @@
-import { createServerClient, type CookieOptions } from "@supabase/ssr";
+import { createServerClient } from "@supabase/ssr";
+import { createClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import type { Database } from "./types";
 
 /**
  * Клієнт для server components / route handlers у Next.js App Router.
  * Читає/пише сесійні cookies (для адмінів через Supabase Auth).
+ *
+ * getAll/setAll — не застарілий {get,set,remove} (той видалили в
+ * @supabase/ssr 0.6+, "will not be supported in the next major version",
+ * саме так і сталось; довелось перейти при апгрейді на 0.12.4, потрібному
+ * для сумісності типів із supabase-js 2.112 — див. коментар у types.ts).
+ * `setAll` у server component (не route handler) кине помилку — Next.js
+ * забороняє встановлювати cookies поза route handler'ом/server action;
+ * ловимо й ігноруємо, це очікувано (middleware.ts і так оновлює сесію).
  */
 export function createSupabaseServerClient() {
   const cookieStore = cookies();
@@ -13,14 +22,16 @@ export function createSupabaseServerClient() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value;
+        getAll() {
+          return cookieStore.getAll();
         },
-        set(name: string, value: string, options: CookieOptions) {
-          cookieStore.set({ name, value, ...options });
-        },
-        remove(name: string, options: CookieOptions) {
-          cookieStore.set({ name, value: "", ...options });
+        setAll(cookiesToSet) {
+          try {
+            cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options));
+          } catch {
+            // Викликано з server component, не route handler/server action —
+            // безпечно ігнорувати, доки middleware.ts оновлює сесію.
+          }
         },
       },
     }
@@ -48,7 +59,6 @@ export function createSupabaseServerClient() {
  * саме тут, на рівні клієнта.
  */
 export function createSupabaseServiceRoleClient() {
-  const { createClient } = require("@supabase/supabase-js");
   return createClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
