@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServiceRoleClient } from "@otak/supabase/server";
 import { requireOwner } from "@/lib/require-admin";
+import { notifyAdmins } from "@otak/push";
 
 // Просте JS-фільтрування замість фільтра на embedded-таблиці в PostgREST
 // (потребував би !inner + dot-notation .eq, менш очевидно надійний) —
@@ -23,7 +24,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
   const { data: target } = await supabase
     .from("admin_users")
-    .select("id, admin_roles(is_owner)")
+    .select("id, full_name, admin_roles(name, is_owner)")
     .eq("id", params.id)
     .maybeSingle();
   if (!target) return NextResponse.json({ error: "Користувача не знайдено" }, { status: 404 });
@@ -35,8 +36,9 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     update.full_name = fullName.trim();
   }
 
+  let newRoleName: string | null = null;
   if (roleId !== undefined) {
-    const { data: newRole } = await supabase.from("admin_roles").select("is_owner").eq("id", roleId).maybeSingle();
+    const { data: newRole } = await supabase.from("admin_roles").select("name, is_owner").eq("id", roleId).maybeSingle();
     if (!newRole) return NextResponse.json({ error: "Роль не знайдено" }, { status: 400 });
 
     const wasOwner = !!(target as any).admin_roles?.is_owner;
@@ -47,6 +49,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       }
     }
     update.role_id = roleId;
+    newRoleName = newRole.name;
   }
 
   const { data: updated, error } = await supabase
@@ -57,6 +60,18 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+
+  if (newRoleName) {
+    const oldRoleName = (target as any).admin_roles?.name ?? "—";
+    notifyAdmins(supabase, {
+      ownersOnly: true,
+      excludeAdminId: user.id,
+      title: "Роль користувача змінена",
+      body: `${(target as any).full_name ?? "Користувач"}: ${oldRoleName} → ${newRoleName}`,
+      url: "/users",
+    }).catch((err) => console.error("[push] role change notify:", err));
+  }
+
   return NextResponse.json({ user: updated });
 }
 

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { randomBytes } from "crypto";
 import { createSupabaseServiceRoleClient } from "@otak/supabase/server";
 import { requireAdmin } from "@/lib/require-admin";
+import { schedulerLastCheckAt } from "@/lib/push-scheduler";
 
 /**
  * GET  /api/mom-links  — список посилань + перелік активних класів (для форми
@@ -21,7 +22,7 @@ export async function GET() {
 
   const { data: settings } = await supabase
     .from("global_settings")
-    .select("mom_links_globally_disabled")
+    .select("mom_links_globally_disabled, push_mom_link_checks_enabled")
     .single();
 
   const { data: classes } = await supabase.from("classes").select("id, name").eq("status", "active").order("name");
@@ -38,6 +39,8 @@ export async function GET() {
   return NextResponse.json({
     links: mapped,
     globalDisabled: !!settings?.mom_links_globally_disabled,
+    pushChecksEnabled: settings?.push_mom_link_checks_enabled ?? true,
+    pushLastCheckAt: schedulerLastCheckAt(),
     classes: classes ?? [],
   });
 }

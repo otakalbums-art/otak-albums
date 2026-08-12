@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@otak/push": "workspace:*",
     "@otak/supabase": "workspace:*",
     "@otak/ui": "workspace:*",
     "next": "14.2.5",

@@ -66,6 +66,8 @@ export default function MomLinksPage() {
   const [links, setLinks] = useState<MomLink[]>([]);
   const [classes, setClasses] = useState<ClassOption[]>([]);
   const [globalDisabled, setGlobalDisabled] = useState(false);
+  const [pushChecksEnabled, setPushChecksEnabled] = useState(true);
+  const [pushLastCheckAt, setPushLastCheckAt] = useState<number | null>(null);
   const [newClassId, setNewClassId] = useState("");
   const [newHours, setNewHours] = useState("72");
   const [creating, setCreating] = useState(false);
@@ -77,6 +79,8 @@ export default function MomLinksPage() {
         setLinks(d.links ?? []);
         setClasses(d.classes ?? []);
         setGlobalDisabled(!!d.globalDisabled);
+        setPushChecksEnabled(d.pushChecksEnabled ?? true);
+        setPushLastCheckAt(d.pushLastCheckAt ?? null);
       })
       .catch(() => {});
   }
@@ -88,6 +92,11 @@ export default function MomLinksPage() {
   async function toggleGlobal(next: boolean) {
     setGlobalDisabled(next);
     await fetch("/api/mom-links/global", { method: "POST", body: JSON.stringify({ disabled: next }) });
+  }
+
+  async function togglePushChecks(next: boolean) {
+    setPushChecksEnabled(next);
+    await fetch("/api/mom-links/push-checks", { method: "POST", body: JSON.stringify({ enabled: next }) });
   }
 
   async function toggleLocal(id: string, next: boolean) {
@@ -191,12 +200,27 @@ export default function MomLinksPage() {
             ))}
           </tbody>
         </table>
+
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-2.5 border-t border-line pt-3.5">
+          <div>
+            <div className="text-[12.5px] font-semibold">🔔 Push-нагадування про закінчення</div>
+            <div className="text-[10.5px] text-ink-soft">
+              {pushLastCheckAt
+                ? `Остання перевірка: ${new Date(pushLastCheckAt).toLocaleString("uk-UA")}`
+                : "Ще не перевірялось з моменту запуску адмінки"}
+            </div>
+          </div>
+          <Toggle checked={pushChecksEnabled} onChange={togglePushChecks} aria-label="Push-нагадування про закінчення посилань" />
+        </div>
       </Card>
       <p className="mt-3 text-xs text-ink-soft">
         Термін дії посилання задається адміном для кожного класу окремо. Перемикач «Це
         посилання» в рядку вимикає достроково лише цей один рядок — інші класи й далі
         працюють. Перемикач «Посилання активні глобально» вгорі — аварійний рубильник:
         вимикає одразу геть усі посилання для мам, незалежно від їхнього власного стану.
+        «Push-нагадування про закінчення» — надсилає сповіщення адмінам із доступом до цієї
+        вкладки, коли посилання ось-ось спливе або вже неактивне; перевіряється сама, поки
+        працює адмінка, вручну нічого запускати не треба.
       </p>
     </div>
   );

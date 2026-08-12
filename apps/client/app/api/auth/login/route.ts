@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServiceRoleClient } from "@otak/supabase";
 import { randomBytes } from "crypto";
+import { notifyAdmins } from "@otak/push";
 
 /**
  * POST /api/auth/login
@@ -16,7 +17,7 @@ export async function POST(req: Request) {
 
   const { data: klass } = await supabase
     .from("classes")
-    .select("id, status")
+    .select("id, name, status")
     .eq("referral_code", referralCode)
     .single();
 
@@ -26,7 +27,7 @@ export async function POST(req: Request) {
 
   const { data: student } = await supabase
     .from("students")
-    .select("id")
+    .select("id, first_name, last_name, first_login_at")
     .eq("class_id", klass.id)
     .ilike("last_name", lastName.trim())
     .ilike("first_name", firstName.trim())
@@ -41,11 +42,21 @@ export async function POST(req: Request) {
 
   const sessionToken = randomBytes(24).toString("hex");
   const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+  const isFirstLogin = !student.first_login_at;
 
-  await supabase
-    .from("students")
-    .update({ session_token: sessionToken, session_expires_at: expiresAt.toISOString() })
-    .eq("id", student.id);
+  const update: Record<string, unknown> = { session_token: sessionToken, session_expires_at: expiresAt.toISOString() };
+  if (isFirstLogin) update.first_login_at = new Date().toISOString();
+
+  await supabase.from("students").update(update).eq("id", student.id);
+
+  if (isFirstLogin) {
+    notifyAdmins(supabase, {
+      tab: "crm",
+      title: "Новий учень приєднався",
+      body: `${student.last_name} ${student.first_name} (${klass.name}) вперше увійшов за посиланням класу`,
+      url: `/classes/${klass.id}/crm`,
+    }).catch((err) => console.error("[push] first-login notify:", err));
+  }
 
   const res = NextResponse.json({ ok: true });
   res.cookies.set("otak_session", sessionToken, {

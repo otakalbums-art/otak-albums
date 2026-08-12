@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createSupabaseServiceRoleClient } from "@otak/supabase";
+import { notifyAdmins } from "@otak/push";
 
 /**
  * POST /api/album-slots/confirm — підтвердити відбір. Сервер сам
@@ -14,7 +15,7 @@ export async function POST() {
   const supabase = createSupabaseServiceRoleClient();
   const { data: student } = await supabase
     .from("students")
-    .select("id, classes(album_type_id)")
+    .select("id, first_name, last_name, classes(id, name, album_type_id)")
     .eq("session_token", sessionToken)
     .single();
   if (!student) return NextResponse.json({ error: "Сесія недійсна" }, { status: 401 });
@@ -44,5 +45,14 @@ export async function POST() {
   }
 
   await supabase.from("students").update({ selection_confirmed_at: new Date().toISOString() }).eq("id", student.id);
+
+  const klass = (student as any).classes;
+  notifyAdmins(supabase, {
+    tab: "crm",
+    title: "Підтверджено відбір",
+    body: `${student.last_name} ${student.first_name} (${klass?.name ?? "клас"}) підтвердила(в) відбір фото`,
+    url: `/classes/${klass?.id}/crm`,
+  }).catch((err) => console.error("[push] confirm notify:", err));
+
   return NextResponse.json({ ok: true });
 }

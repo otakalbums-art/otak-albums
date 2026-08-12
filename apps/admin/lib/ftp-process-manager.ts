@@ -1,5 +1,7 @@
 import { spawn, execSync, type ChildProcess } from "child_process";
 import path from "path";
+import { createSupabaseServiceRoleClient } from "@otak/supabase/server";
+import { notifyAdmins } from "@otak/push";
 
 /**
  * Керує процесом scripts/ftp-ingest.mjs з кнопок в адмінці замість
@@ -12,11 +14,12 @@ type ManagerState = {
   child: ChildProcess | null;
   startedAt: number | null;
   logs: string[];
+  manualStop: boolean;
 };
 
 const g = globalThis as unknown as { __ftpManager?: ManagerState };
 if (!g.__ftpManager) {
-  g.__ftpManager = { child: null, startedAt: null, logs: [] };
+  g.__ftpManager = { child: null, startedAt: null, logs: [], manualStop: false };
 }
 const state = g.__ftpManager;
 
@@ -54,13 +57,27 @@ export function startFtp() {
   state.child = child;
   state.startedAt = Date.now();
   state.logs = [];
+  state.manualStop = false;
 
   child.stdout?.on("data", (d) => pushLog(d.toString()));
   child.stderr?.on("data", (d) => pushLog(d.toString()));
   child.on("exit", (code) => {
     pushLog(`[процес завершився, код ${code}]`);
+    // Впав сам, не через кнопку "Зупинити" в адмінці — саме цей випадок
+    // і потребує push: посеред зйомки прийом фото з камери міг тихо
+    // зупинитись, і ніхто про це не дізнається, поки не зайде в вкладку.
+    if (!state.manualStop) {
+      const supabase = createSupabaseServiceRoleClient();
+      notifyAdmins(supabase, {
+        tab: "ftp",
+        title: "Прийом з камер зупинився",
+        body: `Процес FTP-прийому неочікувано завершився (код ${code}) — фото з камер більше не приймаються`,
+        url: "/ftp-import",
+      }).catch((err) => console.error("[push] ftp crash notify:", err));
+    }
     state.child = null;
     state.startedAt = null;
+    state.manualStop = false;
   });
   child.on("error", (err) => {
     pushLog(`[помилка запуску: ${err.message}]`);
@@ -78,6 +95,7 @@ export function stopFtp() {
     return { ok: true, wasRunning: false };
   }
 
+  state.manualStop = true; // перевіряється в exit-хендлері вище, до нуляння
   const pid = state.child.pid;
   try {
     // Звичайний child.kill() на Windows часто лишає дочірні хендли (той самий

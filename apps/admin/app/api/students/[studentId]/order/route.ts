@@ -1,8 +1,16 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServiceRoleClient } from "@otak/supabase/server";
 import { requireAdmin } from "@/lib/require-admin";
+import { notifyAdmins } from "@otak/push";
 
 const STATUSES = ["not_ordered", "ordered", "partially_paid", "paid", "free"] as const;
+const STATUS_LABEL: Record<string, string> = {
+  not_ordered: "Не замовили",
+  ordered: "Замовили",
+  partially_paid: "Частково оплатили",
+  paid: "Оплатили повністю",
+  free: "Безкоштовно",
+};
 
 /**
  * PUT /api/students/[studentId]/order — статус замовлення/оплати альбому.
@@ -34,7 +42,7 @@ export async function PUT(req: Request, { params }: { params: { studentId: strin
 
   const { data: student } = await service
     .from("students")
-    .select("id, order_amount, paid_amount, ordered_at, paid_at, classes(album_types(price))")
+    .select("id, first_name, last_name, order_status, order_amount, paid_amount, ordered_at, paid_at, classes(id, name, album_types(price))")
     .eq("id", params.studentId)
     .maybeSingle();
   if (!student) return NextResponse.json({ error: "Учня не знайдено" }, { status: 404 });
@@ -62,6 +70,17 @@ export async function PUT(req: Request, { params }: { params: { studentId: strin
 
   const { error } = await service.from("students").update(update).eq("id", params.studentId);
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+
+  if (status !== student.order_status) {
+    const klass = (student as any).classes;
+    notifyAdmins(service, {
+      tab: "crm",
+      excludeAdminId: user.id,
+      title: "Статус оплати змінився",
+      body: `${student.last_name} ${student.first_name} (${klass?.name ?? "клас"}): ${STATUS_LABEL[student.order_status] ?? student.order_status} → ${STATUS_LABEL[status] ?? status}`,
+      url: `/classes/${klass?.id}/crm`,
+    }).catch((err) => console.error("[push] order status notify:", err));
+  }
 
   return NextResponse.json({ ok: true });
 }

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { randomBytes } from "crypto";
 import { createSupabaseServiceRoleClient } from "@otak/supabase/server";
 import { requireOwner } from "@/lib/require-admin";
+import { notifyAdmins } from "@otak/push";
 
 /**
  * GET  /api/admin-users — список адмінів + назва їхньої ролі.
@@ -54,7 +55,7 @@ export async function POST(req: Request) {
 
   const supabase = createSupabaseServiceRoleClient();
 
-  const { data: role } = await supabase.from("admin_roles").select("id").eq("id", roleId).maybeSingle();
+  const { data: role } = await supabase.from("admin_roles").select("id, name").eq("id", roleId).maybeSingle();
   if (!role) return NextResponse.json({ error: "Роль не знайдено" }, { status: 400 });
 
   const tempPassword = randomBytes(9).toString("base64url"); // ~12 символів, url-safe
@@ -76,6 +77,14 @@ export async function POST(req: Request) {
     await supabase.auth.admin.deleteUser(created.user.id);
     return NextResponse.json({ error: insertError.message }, { status: 400 });
   }
+
+  notifyAdmins(supabase, {
+    ownersOnly: true,
+    excludeAdminId: user.id,
+    title: "Новий адмін доданий",
+    body: `${fullName.trim()} (${email.trim()}), роль: ${role.name}`,
+    url: "/users",
+  }).catch((err) => console.error("[push] new admin notify:", err));
 
   return NextResponse.json({
     user: { id: created.user.id, fullName: fullName.trim(), email: email.trim() },

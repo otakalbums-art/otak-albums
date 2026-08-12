@@ -11,6 +11,7 @@
     "ftp:start": "node scripts/ftp-ingest.mjs"
   },
   "dependencies": {
+    "@otak/push": "workspace:*",
     "@otak/supabase": "workspace:*",
     "@otak/ui": "workspace:*",
     "@supabase/supabase-js": "^2.45.4",

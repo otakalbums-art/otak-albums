@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { LogoutButton } from "./logout-button";
+import { NotificationsToggle } from "./notifications-toggle";
 import { createSupabaseServerClient } from "@otak/supabase/server";
 import { ADMIN_TABS } from "@/lib/admin-tabs";
+import { ensureSchedulerRunning } from "@/lib/push-scheduler";
 
 export const metadata: Metadata = {
   title: "Otak Albums — адмін-панель",
@@ -10,6 +12,8 @@ export const metadata: Metadata = {
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  ensureSchedulerRunning(); // ідемпотентно — реально стартує лише один раз за життя сервера
+
   const supabase = createSupabaseServerClient();
   const {
     data: { user },
@@ -71,6 +75,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 {roleName && (
                   <div className="hidden px-2.5 pb-1 text-[10.5px] text-ink-soft md:block">Роль: {roleName}</div>
                 )}
+                <NotificationsToggle />
                 <div className="mt-1.5 md:mt-0">
                   <LogoutButton />
                 </div>
