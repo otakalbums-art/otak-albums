@@ -23,6 +23,20 @@ if (!g.__ftpManager) {
 }
 const state = g.__ftpManager;
 
+/**
+ * scripts/ftp-ingest.mjs піднімає локальний FTP-сервер, до якого камера
+ * підключається напряму по LAN — це фізично можливо лише коли сама адмінка
+ * теж запущена на тому ж ноутбуці (`next dev`/`next start`), в одній
+ * Wi-Fi мережі з камерою. На Vercel (serverless) файл скрипта навіть не
+ * потрапляє в білд (Next трейсить лише import/require, а не рядок у
+ * spawn()), і навіть якби потрапляв — хмарна функція не може тримати
+ * довгоживучий TCP-listener у локальній мережі venue. Тому тут явна
+ * перевірка замість кидання MODULE_NOT_FOUND у користувача.
+ */
+function isCloudEnv() {
+  return !!process.env.VERCEL;
+}
+
 const MAX_LOG_LINES = 200;
 function pushLog(chunk: string) {
   for (const line of chunk.split("\n")) {
@@ -41,10 +55,21 @@ export function ftpStatus() {
     running: isAlive(),
     startedAt: state.startedAt,
     logs: state.logs.slice(-50),
+    unavailable: isCloudEnv(),
   };
 }
 
 export function startFtp() {
+  if (isCloudEnv()) {
+    return {
+      ok: false,
+      error:
+        "Прийом з камер працює лише коли адмінка запущена локально на ноутбуці " +
+        "в одній Wi-Fi мережі з камерою (pnpm --filter admin dev, або окремо " +
+        "pnpm --filter admin run ftp:start). У хмарному деплої на Vercel це " +
+        "технічно неможливо — камера не має прямого доступу до серверa.",
+    };
+  }
   if (isAlive()) return { ok: true, alreadyRunning: true };
 
   const adminRoot = process.cwd(); // apps/admin під час `next dev`/`next start`

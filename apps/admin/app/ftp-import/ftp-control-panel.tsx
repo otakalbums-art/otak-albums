@@ -96,10 +96,15 @@ export function FtpControlPanel({
   credentialsByClassId: Record<string, Creds>;
 }) {
   // --- статус приймача (poll кожні 3с) ---
-  const [status, setStatus] = useState<{ running: boolean; ips: { address: string; name: string }[]; port: number; logs: string[] } | null>(
-    null
-  );
+  const [status, setStatus] = useState<{
+    running: boolean;
+    ips: { address: string; name: string }[];
+    port: number;
+    logs: string[];
+    unavailable?: boolean;
+  } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [toggleError, setToggleError] = useState<string | null>(null);
 
   async function refreshStatus() {
     const res = await fetch("/api/ftp/status");
@@ -114,7 +119,10 @@ export function FtpControlPanel({
 
   async function toggleServer(next: boolean) {
     setBusy(true);
-    await fetch(next ? "/api/ftp/start" : "/api/ftp/stop", { method: "POST" });
+    setToggleError(null);
+    const res = await fetch(next ? "/api/ftp/start" : "/api/ftp/stop", { method: "POST" });
+    const data = await res.json().catch(() => null);
+    if (data?.ok === false && data.error) setToggleError(data.error);
     await refreshStatus();
     setBusy(false);
   }
@@ -214,18 +222,33 @@ export function FtpControlPanel({
           <Toggle
             checked={!!status?.running}
             onChange={(next) => toggleServer(next)}
+            disabled={!!status?.unavailable}
             aria-label="Увімкнути/вимкнути прийом фото"
           />
         </div>
 
-        {status?.running && primaryIp && (
+        {status?.unavailable && (
+          <p className="mt-3 rounded-[9px] bg-[#FFF4E5] p-2.5 text-xs text-ink">
+            ⚠️ Ця адмінка запущена в хмарі (Vercel) — прийом з камер по FTP тут технічно
+            неможливий: камера підключається напряму по локальній Wi-Fi мережі до ноутбука.
+            Запусти адмінку локально на ноутбуці, що буде поруч з камерою на зйомці
+            (<code className="rounded bg-white px-1 py-0.5 font-mono">pnpm --filter admin dev</code>),
+            і перемикач тут запрацює.
+          </p>
+        )}
+
+        {toggleError && !status?.unavailable && (
+          <p className="mt-3 rounded-[9px] bg-[#FFE5E5] p-2.5 text-xs text-ink">⚠️ {toggleError}</p>
+        )}
+
+        {!status?.unavailable && status?.running && primaryIp && (
           <p className="mt-3 text-xs text-ink-soft">
             Комп'ютер і камера мають бути в одній Wi-Fi мережі. Адреса комп'ютера:{" "}
             <b className="font-mono text-ink">{primaryIp}</b>, порт <b className="font-mono text-ink">{status.port}</b>.
           </p>
         )}
 
-        {!status?.running && (
+        {!status?.unavailable && !status?.running && (
           <p className="mt-3 text-xs text-ink-soft">
             Натисни перемикач, щоб увімкнути прийом — тоді камери зможуть підключатись.
           </p>
