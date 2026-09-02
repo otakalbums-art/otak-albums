@@ -119,6 +119,14 @@ travel-роутері/хотспоті). Якщо в майстрі це про�
 
 ## 4. JPEG і RAW — окремі підпапки, автоматично
 
+⚠️ Бакет Storage `photos` має власний білий список `allowed_mime_types` —
+RAW вивантажується з `content-type: application/octet-stream`, тож цей
+тип **має бути в списку дозволених** (поряд з `image/jpeg`), інакше
+Supabase мовчки відкидає RAW-файл (`mime type ... is not supported`), а
+сам JPEG при цьому й далі проходить — легко пропустити. Перевірити/змінити:
+Dashboard → Storage → бакет `photos` → Configuration, або через Storage
+API (`PUT /storage/v1/bucket/photos`, поле `allowed_mime_types`).
+
 Приймач бере й JPEG, і RAW (`.cr2`/`.cr3`, `.nef`/`.nrw`, `.arw`/`.sr2`,
 `.raf`, `.orf`, `.rw2`, `.pef`, `.srw`, `.x3f`, `.dng` — повний список у
 `apps/admin/lib/file-type.ts`). Розводити їх вручну не треба: система сама
