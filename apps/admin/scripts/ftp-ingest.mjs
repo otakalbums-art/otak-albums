@@ -119,8 +119,10 @@ function folderFor(fileType) {
 
 // --- креденшли класу (той самий алгоритм, що й на сторінці /ftp-import) ---
 export function ftpCredentialsForClass(classId) {
-  const h = createHmac("sha256", FTP_SECRET).update(classId).digest("hex");
-  return { username: `class-${h.slice(0, 6)}`, password: h.slice(6, 18) };
+  const h = createHmac("sha256", FTP_SECRET).update(classId).digest();
+  const username = String(100000 + (h.readUInt32BE(0) % 900000));
+  const password = String(100000 + (h.readUInt32BE(4) % 900000));
+  return { username, password };
 }
 
 function lanIps() {

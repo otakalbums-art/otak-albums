@@ -8,10 +8,14 @@ import { createHmac } from "crypto";
  * Node-процес, не проходить через збірку Next.js, тому імпортувати звідси
  * напряму не може) — тримай обидва місця синхронними при зміні.
  */
+// Значення навмисно чисто цифрові (6+6 знаків) — набагато швидше набирати
+// колесом/D-pad'ом на екрані камери, ніж hex-рядок з буквами.
 export function ftpCredentialsForClass(classId: string) {
   const secret = process.env.FTP_INGEST_SECRET || "dev-only-insecure-secret-change-me";
-  const h = createHmac("sha256", secret).update(classId).digest("hex");
-  return { username: `class-${h.slice(0, 6)}`, password: h.slice(6, 18) };
+  const h = createHmac("sha256", secret).update(classId).digest();
+  const username = String(100000 + (h.readUInt32BE(0) % 900000));
+  const password = String(100000 + (h.readUInt32BE(4) % 900000));
+  return { username, password };
 }
 
 export function lanIps() {
