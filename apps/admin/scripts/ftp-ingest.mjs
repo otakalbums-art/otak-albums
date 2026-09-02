@@ -41,7 +41,7 @@
  */
 
 import { createClient } from "@supabase/supabase-js";
-import FtpSrv from "ftp-srv";
+import FtpSrv, { FileSystem } from "ftp-srv";
 import chokidar from "chokidar";
 import { createHmac, randomUUID, timingSafeEqual } from "crypto";
 import { networkInterfaces } from "os";
@@ -49,6 +49,45 @@ import { fileURLToPath } from "url";
 import http from "http";
 import path from "path";
 import fs from "fs";
+
+/**
+ * ftp-srv не вміє wildcard-патерни в LIST/NLST: перед завантаженням файлу
+ * камера типово шле `NLST R6__1234*`, щоб перевірити, чи такий файл уже є
+ * на сервері. Дефолтна файлова система бібліотеки намагається fs.stat()
+ * буквальний рядок "R6__1234*" і падає з ENOENT замість порожнього списку
+ * — а камера, отримавши помилку замість "нема такого", просто МОВЧКИ
+ * скасовує все завантаження (без жодної помилки на екрані). Відомий баг:
+ * https://github.com/QuorumDMS/ftp-srv/discussions/173. Патчимо тим самим
+ * способом, що й там: якщо в імені є wildcard — не стати́мо його як файл,
+ * а йдемо в list() і фільтруємо вміст директорії регуляркою.
+ */
+const GLOB_CHARS = /[*?[\]]/;
+function globToRegExp(glob) {
+  const escaped = glob.replace(/[.+^${}()|\\]/g, "\\$&").replace(/\*/g, ".*").replace(/\?/g, ".");
+  return new RegExp(`^${escaped}$`, "i");
+}
+class GlobAwareFileSystem extends FileSystem {
+  get(fileName) {
+    if (GLOB_CHARS.test(fileName)) {
+      // "Директорія" тут фіктивна — важливо лише isDirectory() === true, щоб
+      // LIST/NLST-обробник (ftp-srv/src/commands/registration/list.js) пішов
+      // гілкою list() нижче, а не спробував статити сам патерн як файл.
+      return Promise.resolve({ name: fileName, isDirectory: () => true, isFile: () => false });
+    }
+    return super.get(fileName);
+  }
+  list(dirPath = ".") {
+    if (!GLOB_CHARS.test(dirPath)) return super.list(dirPath);
+    const normalized = dirPath.replace(/\\/g, "/");
+    const slashIdx = normalized.lastIndexOf("/");
+    const dir = slashIdx === -1 ? "." : normalized.slice(0, slashIdx) || "/";
+    const pattern = slashIdx === -1 ? normalized : normalized.slice(slashIdx + 1);
+    const regex = globToRegExp(pattern);
+    // super.list() — саме батьківський метод, без wildcard у dir, тож не
+    // зациклюємось і отримуємо звичайний, безпечний листинг директорії.
+    return super.list(dir).then((entries) => entries.filter((e) => regex.test(e.name)));
+  }
+}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ADMIN_ROOT = path.resolve(__dirname, "..");
@@ -199,7 +238,7 @@ const ftpServer = new FtpSrv({
   greeting: ["Otak Albums — camera ingest"],
 });
 
-ftpServer.on("login", async ({ username, password }, resolve, reject) => {
+ftpServer.on("login", async ({ username, password, connection }, resolve, reject) => {
   if (!enabled) return reject(new Error("Прийом вимкнено в адмінці"));
 
   const { data: classes } = await supabase.from("classes").select("id").eq("status", "active");
@@ -218,7 +257,7 @@ ftpServer.on("login", async ({ username, password }, resolve, reject) => {
     fs.mkdirSync(path.join(root, category), { recursive: true });
   }
   log(`[ftp] ✓ підключення від камери, клас ${match.id}`);
-  resolve({ root });
+  resolve({ fs: new GlobAwareFileSystem(connection, { root }) });
 });
 
 ftpServer.on("client-error", ({ context, error }) => {
