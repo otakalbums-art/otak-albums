@@ -54,8 +54,10 @@ function isAlive() {
 type VmStatus = { running: boolean; startedAt: number; logs: string[]; host: string; port: number };
 
 function vmConfig() {
-  const host = process.env.FTP_VM_HOST;
-  const secret = process.env.FTP_CONTROL_SECRET;
+  // .trim() — Vercel's env var UI happily stores a copy-pasted trailing
+  // newline/space, яке нічим не видно в полі, але ламає URL/секрет.
+  const host = process.env.FTP_VM_HOST?.trim();
+  const secret = process.env.FTP_CONTROL_SECRET?.trim();
   const port = Number(process.env.FTP_VM_CONTROL_PORT || 8090);
   if (!host || !secret) return null;
   return { host, secret, port };
@@ -72,9 +74,17 @@ async function vmRequest(pathname: string, method: "GET" | "POST"): Promise<VmSt
       // й не миттєво; не даємо запиту зависнути назавжди, якщо VM недоступна.
       signal: AbortSignal.timeout(8000),
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      // Логуємо статус (401 — не той секрет/зайвий пробіл при вставці в
+      // Vercel; інше — щось на рівні самого control-сервера) — раніше це
+      // мовчки повертало null, і від "невірний секрет" було не відрізнити
+      // "сервер недосяжний" у відповіді користувачу.
+      console.error(`[ftp] control-сервер ${cfg.host}:${cfg.port}${pathname} -> HTTP ${res.status}`);
+      return null;
+    }
     return (await res.json()) as VmStatus;
-  } catch {
+  } catch (err) {
+    console.error(`[ftp] не вдалось достукатись до control-сервера ${cfg.host}:${cfg.port}${pathname}:`, err);
     return null;
   }
 }
