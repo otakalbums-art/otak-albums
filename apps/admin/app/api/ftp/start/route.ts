@@ -6,5 +6,5 @@ export async function POST() {
   const user = await requireAdmin("ftp");
   if (!user) return NextResponse.json({ error: "Доступ заборонено" }, { status: 403 });
 
-  return NextResponse.json(startFtp());
+  return NextResponse.json(await startFtp());
 }

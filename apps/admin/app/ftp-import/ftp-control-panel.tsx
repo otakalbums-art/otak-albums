@@ -102,6 +102,8 @@ export function FtpControlPanel({
     port: number;
     logs: string[];
     unavailable?: boolean;
+    unavailableReason?: "not_configured" | "vm_unreachable";
+    mode?: "local" | "cloud";
   } | null>(null);
   const [busy, setBusy] = useState(false);
   const [toggleError, setToggleError] = useState<string | null>(null);
@@ -227,13 +229,17 @@ export function FtpControlPanel({
           />
         </div>
 
-        {status?.unavailable && (
+        {status?.unavailable && status.unavailableReason === "not_configured" && (
           <p className="mt-3 rounded-[9px] bg-[#FFF4E5] p-2.5 text-xs text-ink">
-            ⚠️ Ця адмінка запущена в хмарі (Vercel) — прийом з камер по FTP тут технічно
-            неможливий: камера підключається напряму по локальній Wi-Fi мережі до ноутбука.
-            Запусти адмінку локально на ноутбуці, що буде поруч з камерою на зйомці
-            (<code className="rounded bg-white px-1 py-0.5 font-mono">pnpm --filter admin dev</code>),
-            і перемикач тут запрацює.
+            ⚠️ Сервер прийому ще не підключено до цієї адмінки (не задано FTP_VM_HOST /
+            FTP_CONTROL_SECRET у Vercel).
+          </p>
+        )}
+
+        {status?.unavailable && status.unavailableReason === "vm_unreachable" && (
+          <p className="mt-3 rounded-[9px] bg-[#FFE5E5] p-2.5 text-xs text-ink">
+            ⚠️ Не вдалось зв'язатись із сервером прийому — можливо, він зараз перезапускається
+            або лежить. Спробуй за хвилину; якщо не допомогло — звернись до розробника.
           </p>
         )}
 
@@ -241,10 +247,19 @@ export function FtpControlPanel({
           <p className="mt-3 rounded-[9px] bg-[#FFE5E5] p-2.5 text-xs text-ink">⚠️ {toggleError}</p>
         )}
 
-        {!status?.unavailable && status?.running && primaryIp && (
+        {!status?.unavailable && status?.mode === "local" && status?.running && primaryIp && (
           <p className="mt-3 text-xs text-ink-soft">
             Комп'ютер і камера мають бути в одній Wi-Fi мережі. Адреса комп'ютера:{" "}
             <b className="font-mono text-ink">{primaryIp}</b>, порт <b className="font-mono text-ink">{status.port}</b>.
+          </p>
+        )}
+
+        {!status?.unavailable && status?.mode === "cloud" && status?.running && primaryIp && (
+          <p className="mt-3 text-xs text-ink-soft">
+            Камера підключається через інтернет (Wi-Fi з доступом в мережу — venue, хотспот,
+            будь-що) до фіксованої адреси сервера:{" "}
+            <b className="font-mono text-ink">{primaryIp}</b>, порт <b className="font-mono text-ink">{status.port}</b>.
+            Ноутбук фотографа тут ні до чого — налаштування на камері одноразові.
           </p>
         )}
 

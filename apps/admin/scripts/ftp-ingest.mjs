@@ -1,9 +1,15 @@
 #!/usr/bin/env node
 /**
- * Локальний приймач фото з Wi-Fi камер (FTP).
+ * Приймач фото з Wi-Fi камер (FTP).
  *
- * Запускати окремо від `pnpm dev`, на тому ж комп'ютері, що й адмінка,
- * поки триває зйомка:  pnpm --filter admin run ftp:start
+ * Два способи запуску:
+ *   1) Локально на ноутбуці фотографа, поки триває зйомка:
+ *      pnpm --filter admin run ftp:start
+ *   2) Постійно на окремому сервері з публічною IP (наш продакшн-варіант,
+ *      бо Vercel — serverless і не може тримати TCP-listener) — тоді
+ *      камера підключається через інтернет до цієї фіксованої адреси,
+ *      а не до ноутбука. Систему керування (увімк/вимк із адмінки) описано
+ *      нижче в блоці "control-сервер".
  *
  * Що робить:
  *   1) Піднімає FTP-сервер на локальній мережі — кожен активний клас
@@ -37,9 +43,10 @@
 import { createClient } from "@supabase/supabase-js";
 import FtpSrv from "ftp-srv";
 import chokidar from "chokidar";
-import { createHmac, randomUUID } from "crypto";
+import { createHmac, randomUUID, timingSafeEqual } from "crypto";
 import { networkInterfaces } from "os";
 import { fileURLToPath } from "url";
+import http from "http";
 import path from "path";
 import fs from "fs";
 
@@ -142,8 +149,47 @@ function lanIps() {
 const DROP_ROOT = path.join(ADMIN_ROOT, ".photo-drop");
 fs.mkdirSync(DROP_ROOT, { recursive: true });
 
+// --- увімк/вимк прийому, керовано з адмінки (control-сервер нижче) ---
+// Персистимо у файл, щоб перезапуск процесу (systemd після падіння/ребута
+// сервера) не скидав стан, який фотограф лишив в адмінці.
+//
+// CONTROL_SECRET читаємо вже тут (а не лише біля control-сервера нижче),
+// бо від нього залежить дефолтне значення enabled: якщо секрету нема,
+// значить це старий локальний сценарій (spawn/kill процесу з
+// ftp-process-manager.ts) — там немає окремого "увімкнути" кроку, сам
+// факт запущеного процесу й означає "прийом увімкнено", як було раніше.
+// А на постійному сервері (секрет заданий) прийом має лишатись вимкненим,
+// доки хтось явно не натисне перемикач в адмінці.
+const CONTROL_SECRET = process.env.FTP_CONTROL_SECRET;
+const STATE_FILE = path.join(ADMIN_ROOT, "state.json");
+let enabled = !CONTROL_SECRET;
+try {
+  enabled = !!JSON.parse(fs.readFileSync(STATE_FILE, "utf8")).enabled;
+} catch {
+  // Першого разу файлу ще нема — лишаємось на дефолті за режимом вище.
+}
+function setEnabled(next) {
+  enabled = next;
+  fs.writeFileSync(STATE_FILE, JSON.stringify({ enabled }));
+}
+
+const START_TIME = Date.now();
+const MAX_LOG_LINES = 100;
+const recentLogs = [];
+/** console.log + запам'ятати для /status (щоб адмінка показувала "Технічний лог"). */
+function log(line) {
+  console.log(line);
+  recentLogs.push(line);
+  if (recentLogs.length > MAX_LOG_LINES) recentLogs.shift();
+}
+
 // --- FTP-сервер ---
-const primaryIp = lanIps()[0]?.address ?? "127.0.0.1";
+// FTP_PUBLIC_HOST — фіксована публічна адреса (задається на сервері явно),
+// пріоритетніша за автовизначення: на хмарному VPS у lanIps() поряд із
+// публічною IP часто є ще й приватна VPC-адреса (10.x.x.x), і яка з них
+// опиниться першою в списку — залежить від ОС, покладатись на це не можна,
+// а PASV з приватною адресою камера просто не побачить.
+const primaryIp = process.env.FTP_PUBLIC_HOST || lanIps()[0]?.address || "127.0.0.1";
 const ftpServer = new FtpSrv({
   url: `ftp://0.0.0.0:${FTP_PORT}`,
   pasv_url: primaryIp,
@@ -154,6 +200,8 @@ const ftpServer = new FtpSrv({
 });
 
 ftpServer.on("login", async ({ username, password }, resolve, reject) => {
+  if (!enabled) return reject(new Error("Прийом вимкнено в адмінці"));
+
   const { data: classes } = await supabase.from("classes").select("id").eq("status", "active");
   const match = (classes ?? []).find((c) => {
     const cred = ftpCredentialsForClass(c.id);
@@ -169,11 +217,12 @@ ftpServer.on("login", async ({ username, password }, resolve, reject) => {
   for (const category of CATEGORIES) {
     fs.mkdirSync(path.join(root, category), { recursive: true });
   }
+  log(`[ftp] ✓ підключення від камери, клас ${match.id}`);
   resolve({ root });
 });
 
 ftpServer.on("client-error", ({ context, error }) => {
-  console.error(`[ftp] помилка з'єднання (${context}):`, error.message);
+  log(`[ftp] ✗ помилка з'єднання (${context}): ${error.message}`);
 });
 
 // --- watcher: коли файл дописаний -> вивантажити в Storage ---
@@ -195,7 +244,7 @@ async function ingest(filePath) {
 
   const fileType = detectFileType(filename);
   if (!fileType) {
-    console.log(`[ftp-ingest] пропущено (не JPEG і не відомий RAW-формат): ${rel}`);
+    log(`[ftp-ingest] пропущено (не JPEG і не відомий RAW-формат): ${rel}`);
     return;
   }
 
@@ -207,7 +256,7 @@ async function ingest(filePath) {
   try {
     const { data: klass } = await supabase.from("classes").select("id").eq("id", classId).maybeSingle();
     if (!klass) {
-      console.warn(`[ftp-ingest] невідомий class_id у шляху, пропускаю: ${rel}`);
+      log(`[ftp-ingest] невідомий class_id у шляху, пропускаю: ${rel}`);
       return;
     }
     // Magic-bytes перевірка робиться лише для JPEG (формат простий і
@@ -216,7 +265,7 @@ async function ingest(filePath) {
     // заголовок) — довіряємо розширенню файлу, як і форма ручного
     // завантаження в адмінці (app/api/photos/upload/route.ts).
     if (fileType === "jpeg" && !(await isJpeg(filePath))) {
-      console.warn(`[ftp-ingest] файл не є валідним JPEG (за magic bytes), пропускаю: ${rel}`);
+      log(`[ftp-ingest] файл не є валідним JPEG (за magic bytes), пропускаю: ${rel}`);
       return;
     }
 
@@ -245,9 +294,9 @@ async function ingest(filePath) {
     await fs.promises.mkdir(path.dirname(dest), { recursive: true });
     await fs.promises.rename(filePath, dest);
 
-    console.log(`[ftp-ingest] ✓ ${filename} -> клас ${classId}, категорія "${category}", ${folder} (${fileType})`);
+    log(`[ftp-ingest] ✓ ${filename} -> клас ${classId}, категорія "${category}", ${folder} (${fileType})`);
   } catch (err) {
-    console.error(`[ftp-ingest] ✗ помилка для ${rel}:`, err.message);
+    log(`[ftp-ingest] ✗ помилка для ${rel}: ${err.message}`);
     const dest = path.join(DROP_ROOT, classId, category, "_errors", filename);
     await fs.promises.mkdir(path.dirname(dest), { recursive: true }).catch(() => {});
     await fs.promises.rename(filePath, dest).catch(() => {});
@@ -261,25 +310,78 @@ const watcher = chokidar.watch(DROP_ROOT, {
 });
 watcher.on("add", ingest);
 
+// --- control-сервер: адмінка (Vercel) керує увімк/вимк і читає статус
+// звідси по HTTP, бо сама тримати цей процес не може (serverless).
+// Захищено спільним секретом (той самий FTP_CONTROL_SECRET на сервері й
+// у Vercel) — без нього будь-хто в інтернеті міг би вимкнути прийом.
+const CONTROL_PORT = Number(process.env.FTP_CONTROL_PORT || 8090);
+
+function isAuthorized(req) {
+  if (!CONTROL_SECRET) return false;
+  const header = req.headers["authorization"] || "";
+  const token = header.startsWith("Bearer ") ? header.slice(7) : "";
+  const a = Buffer.from(token);
+  const b = Buffer.from(CONTROL_SECRET);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+function sendJson(res, status, body) {
+  res.writeHead(status, { "content-type": "application/json" });
+  res.end(JSON.stringify(body));
+}
+
+const controlServer = http.createServer((req, res) => {
+  if (!isAuthorized(req)) return sendJson(res, 401, { error: "unauthorized" });
+
+  if (req.method === "GET" && req.url === "/status") {
+    return sendJson(res, 200, {
+      running: enabled,
+      startedAt: START_TIME,
+      logs: recentLogs.slice(-50),
+      host: primaryIp,
+      port: FTP_PORT,
+    });
+  }
+  if (req.method === "POST" && req.url === "/enable") {
+    setEnabled(true);
+    log("[control] прийом увімкнено з адмінки");
+    return sendJson(res, 200, { ok: true, running: true });
+  }
+  if (req.method === "POST" && req.url === "/disable") {
+    setEnabled(false);
+    log("[control] прийом вимкнено з адмінки");
+    return sendJson(res, 200, { ok: true, running: false });
+  }
+  sendJson(res, 404, { error: "not found" });
+});
+
 // --- старт + інфо для налаштування камери ---
-ftpServer
-  .listen()
+// Control-сервер піднімаємо лише коли є секрет (постійний сервер) — у
+// локальному сценарії (spawn/kill з ftp-process-manager.ts) він не
+// потрібен, і зайвий відкритий порт ні до чого.
+const startControlServer = CONTROL_SECRET
+  ? new Promise((resolve) => controlServer.listen(CONTROL_PORT, resolve))
+  : Promise.resolve();
+
+Promise.all([ftpServer.listen(), startControlServer])
   .then(() => {
     console.log("═".repeat(60));
     console.log("FTP-приймач фото запущено");
     console.log(`  Порт: ${FTP_PORT} (passive: ${PASV_MIN}-${PASV_MAX})`);
-    console.log("  IP-адреси в локальній мережі:");
-    for (const ip of lanIps()) console.log(`    ${ip.address}  (${ip.name})`);
+    console.log(`  Публічна/локальна адреса: ${primaryIp}`);
+    console.log(`  Control-сервер: :${CONTROL_PORT} (${CONTROL_SECRET ? "захищено секретом" : "БЕЗ секрету!"})`);
+    console.log(`  Прийом зараз: ${enabled ? "УВІМКНЕНО" : "вимкнено"}`);
     console.log("  Креденшли на клас дивись у адмінці: /ftp-import");
     console.log("═".repeat(60));
   })
   .catch((err) => {
-    console.error("Не вдалося запустити FTP-сервер:", err.message);
+    console.error("Не вдалося запустити сервер:", err.message);
     process.exit(1);
   });
 
 process.on("SIGINT", async () => {
   await ftpServer.close();
   await watcher.close();
+  controlServer.close();
   process.exit(0);
 });

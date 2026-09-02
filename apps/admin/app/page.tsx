@@ -114,7 +114,7 @@ export default async function DashboardPage() {
   }));
 
   // Оперативний стан — щоб не заходити в "Прийом з камер"/"Для мам" лише перевірити.
-  const ftp = ftpStatus();
+  const ftp = await ftpStatus();
   const { data: globalSettings } = await supabase
     .from("global_settings")
     .select("mom_links_globally_disabled")
