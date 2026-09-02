@@ -23,7 +23,13 @@ export function lanIps() {
   const out: { name: string; address: string }[] = [];
   for (const [name, addrs] of Object.entries(networkInterfaces())) {
     for (const a of addrs ?? []) {
-      if (a.family === "IPv4" && !a.internal) out.push({ name, address: a.address });
+      // 169.254.x.x (APIPA/link-local) — самопризначена адреса "мертвого"
+      // адаптера без DHCP (VPN, Hyper-V, вимкнений Wi-Fi тощо); камера по
+      // ній ніколи не достукається, тож одразу відкидаємо, щоб не
+      // підсунути фотографу неробочий Host.
+      if (a.family === "IPv4" && !a.internal && !a.address.startsWith("169.254.")) {
+        out.push({ name, address: a.address });
+      }
     }
   }
   return out;

@@ -264,7 +264,7 @@ export function FtpControlPanel({
         )}
       </Card>
 
-      {classes.length === 0 ? (
+      {status?.unavailable ? null : classes.length === 0 ? (
         <Card menu={false}>
           <p className="text-sm text-ink-soft">Активних класів ще немає — створіть на вкладці «Класи та папки».</p>
         </Card>

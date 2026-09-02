@@ -129,7 +129,11 @@ function lanIps() {
   const out = [];
   for (const [name, addrs] of Object.entries(networkInterfaces())) {
     for (const a of addrs ?? []) {
-      if (a.family === "IPv4" && !a.internal) out.push({ name, address: a.address });
+      // 169.254.x.x (APIPA/link-local) — див. коментар біля дубліката в
+      // apps/admin/lib/ftp-credentials.ts.
+      if (a.family === "IPv4" && !a.internal && !a.address.startsWith("169.254.")) {
+        out.push({ name, address: a.address });
+      }
     }
   }
   return out;
