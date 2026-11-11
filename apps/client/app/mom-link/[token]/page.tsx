@@ -19,7 +19,7 @@ export default async function MomLinkPage({ params }: { params: { token: string 
 
   const { data: link } = await supabase
     .from("mom_links")
-    .select("*, classes(name, schools(name))")
+    .select("*, classes(name, status, schools(name))")
     .eq("token", params.token)
     .single();
 
@@ -31,7 +31,9 @@ export default async function MomLinkPage({ params }: { params: { token: string 
   if (!link) return notFound();
 
   const expired = new Date(link.expires_at) < new Date();
-  const disabled = !link.is_active || settings?.mom_links_globally_disabled;
+  // Архівний клас — посилання не працюють, дані класу лише збережені.
+  const disabled =
+    !link.is_active || settings?.mom_links_globally_disabled || (link as any).classes?.status === "archived";
 
   if (expired || disabled) {
     return (

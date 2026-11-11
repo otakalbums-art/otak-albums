@@ -2,7 +2,8 @@ import { Card, StatusChip } from "@otak/ui";
 import { createSupabaseServerClient } from "@otak/supabase/server";
 import { CreateClassForm } from "./create-class-form";
 import { ReferralLinkCell } from "./referral-link-cell";
-import { ClipboardList, Images, Upload } from "lucide-react";
+import { Archive, ClipboardList, Images, Upload } from "lucide-react";
+import { ClassRowActions } from "./class-row-actions";
 
 /**
  * Список класів + створення нової "папки класу" (POST /api/classes) —
@@ -28,6 +29,9 @@ export default async function ClassesPage() {
     .order("sort_order")
     .order("created_at");
 
+  const active = (classes ?? []).filter((c: any) => c.status !== "archived");
+  const archived = (classes ?? []).filter((c: any) => c.status === "archived");
+
   return (
     <div>
       <Card
@@ -39,69 +43,112 @@ export default async function ClassesPage() {
         menu={false}
       >
         <CreateClassForm schools={schools ?? []} albumTypes={albumTypes ?? []} />
-        <div className="overflow-x-auto">
-          <table className="w-full table-fixed text-[13px]">
-            <colgroup>
-              <col className="w-[18%]" />
-              <col className="w-[7%]" />
-              <col className="w-[19%]" />
-              <col className="w-[10%]" />
-              <col />
-            </colgroup>
-            <thead>
-              <tr className="border-b-[1.5px] border-line text-left text-[11px] font-bold text-ink-soft">
-                <th className="px-3 py-2">Клас</th>
-                <th className="px-3 py-2">Фото</th>
-                <th className="px-3 py-2">Реф. посилання</th>
-                <th className="px-3 py-2">Статус</th>
-                <th className="px-3 py-2"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {classes?.map((c: any) => (
-                <tr key={c.id} className="border-b border-line">
-                  <td className="px-3 py-2.5">{c.name}, {c.schools?.name}</td>
-                  <td className="px-3 py-2.5">{c.photos?.length ?? 0}</td>
-                  <td className="px-3 py-2.5">
-                    <ReferralLinkCell url={`${SITE_URL}/login/${c.referral_code}`} />
-                  </td>
-                  <td className="px-3 py-2.5">
-                    <StatusChip status={c.status === "active" ? "active" : "off"}>
-                      {c.status === "active" ? "Активна" : "Очікує"}
-                    </StatusChip>
-                  </td>
-                  <td className="px-3 py-2.5">
-                    <div className="flex flex-wrap gap-1.5">
-                      <a
-                        href={`/classes/${c.id}/upload`}
-                        className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-line bg-page px-2.5 py-1.5 text-[11.5px] font-semibold text-ink transition-colors hover:border-purple hover:text-purple"
-                      >
-                        <Upload className="h-3.5 w-3.5" /> Завантажити фото
-                      </a>
-                      <a
-                        href={`/classes/${c.id}/photos`}
-                        className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-line bg-page px-2.5 py-1.5 text-[11.5px] font-semibold text-ink transition-colors hover:border-purple hover:text-purple"
-                      >
-                        <Images className="h-3.5 w-3.5" /> Фото (JPEG + RAW)
-                      </a>
-                      <a
-                        href={`/classes/${c.id}/crm`}
-                        className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-line bg-page px-2.5 py-1.5 text-[11.5px] font-semibold text-ink transition-colors hover:border-purple hover:text-purple"
-                      >
-                        <ClipboardList className="h-3.5 w-3.5" /> CRM
-                      </a>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <ClassesTable classes={active} />
         <p className="mt-2.5 text-xs text-ink-soft">
           Після створення папки класу реферальне посилання генерується автоматично й
           надсилається відповідальній особі для заповнення форми учнів.
         </p>
       </Card>
+
+      {archived.length > 0 && (
+        <div className="mt-5">
+          <Card
+            title={
+              <span className="inline-flex items-center gap-1.5">
+                <Archive className="h-4 w-4" /> Архів ({archived.length})
+              </span>
+            }
+            menu={false}
+          >
+            <ClassesTable classes={archived} />
+            <p className="mt-2.5 text-xs text-ink-soft">
+              Архівні класи неактивні: учні не можуть зайти, посилання для мам не відкриваються,
+              камери не приймають фото. Усі дані збережені — клас можна повернути.
+            </p>
+          </Card>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const chip =
+  "inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-line bg-page px-2.5 py-1.5 text-[11.5px] font-semibold text-ink transition-colors hover:border-purple hover:text-purple";
+
+function StatusCell({ status }: { status: string }) {
+  if (status === "archived") {
+    return <span className="rounded-full bg-line px-[9px] py-[3px] text-[10.5px] font-bold text-ink-soft">Архів</span>;
+  }
+  return (
+    <StatusChip status={status === "active" ? "active" : "off"}>{status === "active" ? "Активна" : "Очікує"}</StatusChip>
+  );
+}
+
+function ClassesTable({ classes }: { classes: any[] }) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full table-fixed text-[13px]">
+        <colgroup>
+          <col className="w-[16%]" />
+          <col className="w-[6%]" />
+          <col className="w-[17%]" />
+          <col className="w-[8%]" />
+          <col />
+        </colgroup>
+        <thead>
+          <tr className="border-b-[1.5px] border-line text-left text-[11px] font-bold text-ink-soft">
+            <th className="px-3 py-2">Клас</th>
+            <th className="px-3 py-2">Фото</th>
+            <th className="px-3 py-2">Реф. посилання</th>
+            <th className="px-3 py-2">Статус</th>
+            <th className="px-3 py-2"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {classes.map((c: any) => (
+            <tr key={c.id} className="border-b border-line">
+              <td className="px-3 py-2.5">
+                {c.name}, {c.schools?.name}
+              </td>
+              <td className="px-3 py-2.5">{c.photos?.length ?? 0}</td>
+              <td className="px-3 py-2.5">
+                <ReferralLinkCell url={`${SITE_URL}/login/${c.referral_code}`} />
+              </td>
+              <td className="px-3 py-2.5">
+                <StatusCell status={c.status} />
+              </td>
+              <td className="px-3 py-2.5">
+                <div className="flex flex-wrap gap-1.5">
+                  {c.status !== "archived" && (
+                    <a href={`/classes/${c.id}/upload`} className={chip}>
+                      <Upload className="h-3.5 w-3.5" /> Завантажити фото
+                    </a>
+                  )}
+                  <a href={`/classes/${c.id}/photos`} className={chip}>
+                    <Images className="h-3.5 w-3.5" /> Фото (JPEG + RAW)
+                  </a>
+                  <a href={`/classes/${c.id}/crm`} className={chip}>
+                    <ClipboardList className="h-3.5 w-3.5" /> CRM
+                  </a>
+                  <ClassRowActions
+                    classId={c.id}
+                    classLabel={c.name}
+                    photoCount={c.photos?.length ?? 0}
+                    archived={c.status === "archived"}
+                  />
+                </div>
+              </td>
+            </tr>
+          ))}
+          {classes.length === 0 && (
+            <tr>
+              <td colSpan={5} className="px-3 py-4 text-ink-soft">
+                Активних класів немає.
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
     </div>
   );
 }
