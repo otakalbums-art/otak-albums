@@ -5,7 +5,7 @@ import { Button, Card, DualScroll } from "@otak/ui";
 import { GroupList } from "./group-list";
 import { createSupabaseBrowserClient } from "@otak/supabase/browser";
 import { classChannel, type Question } from "@otak/supabase/cabinet";
-import { CalendarDays, Check, Clock, Images, Lock, Users } from "lucide-react";
+import { CalendarDays, CalendarX, Check, Clock, Images, Loader2, Lock, Users } from "lucide-react";
 import { redirectToLogin } from "@/lib/session-redirect";
 
 type Row = {
@@ -174,9 +174,10 @@ export default function CabinetPage() {
                 <button
                   onClick={() => pickTime(null)}
                   disabled={timeBusy !== null}
-                  className="mt-2 text-[11.5px] text-ink-soft hover:text-warn hover:underline"
+                  className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-[9px] border-[1.5px] border-warn/40 bg-[#FBEAEA] px-3 py-2.5 text-[13px] font-bold text-warn transition-colors hover:border-warn disabled:opacity-50 sm:w-auto"
                 >
-                  Звільнити мій час
+                  {timeBusy === "clear" ? <Loader2 className="h-4 w-4 animate-spin" /> : <CalendarX className="h-4 w-4" />}
+                  Звільнити мій час {me.shootTime}
                 </button>
               )}
             </div>
