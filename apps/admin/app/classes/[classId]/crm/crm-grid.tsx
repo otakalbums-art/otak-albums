@@ -2,7 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { PhotoPicker } from "./photo-picker";
-import { Camera, Check, FileText, Gift, X } from "lucide-react";
+import { Camera, Check, Clock, FileText, Gift, Link2, X } from "lucide-react";
+import { createSupabaseBrowserClient } from "@otak/supabase/browser";
+import { classChannel, type Question } from "@otak/supabase/cabinet";
+
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
 type Slot = {
   id: string;
@@ -29,6 +33,11 @@ type Student = {
   order_amount: number | null;
   paid_amount: number;
   selection_confirmed_at: string | null;
+  access_token: string;
+  shoot_time: string | null;
+  deposit_amount: number | null;
+  extra_payment_amount: number | null;
+  answers: Record<string, string>;
   values: Record<string, PhotoValue | TextValue>;
 };
 
@@ -176,17 +185,13 @@ function OrderCell({
   status: OrderStatus;
   amount: number | null;
   paid: number;
-  onChange: (status: OrderStatus, amount: number | null, paid: number) => void;
+  onChange: (status: OrderStatus, amount: number | null) => void;
 }) {
   const [draftAmount, setDraftAmount] = useState(amount != null ? String(amount) : "");
-  const [draftPaid, setDraftPaid] = useState(paid ? String(paid) : "");
 
   useEffect(() => {
     setDraftAmount(amount != null ? String(amount) : "");
   }, [amount]);
-  useEffect(() => {
-    setDraftPaid(paid ? String(paid) : "");
-  }, [paid]);
 
   const remaining = amount != null ? amount - paid : null;
 
@@ -197,11 +202,7 @@ function OrderCell({
           value={status}
           onChange={(e) => {
             const next = e.target.value as OrderStatus;
-            if (next === "free") {
-              onChange(next, 0, 0);
-            } else {
-              onChange(next, draftAmount ? Number(draftAmount) : amount, draftPaid ? Number(draftPaid) : paid);
-            }
+            onChange(next, next === "free" ? 0 : draftAmount ? Number(draftAmount) : amount);
           }}
           className={`rounded-full border-none px-2 py-1 text-[11px] font-bold outline-none ${ORDER_STATUS_STYLE[status]}`}
         >
@@ -218,21 +219,14 @@ function OrderCell({
               min={0}
               value={draftAmount}
               onChange={(e) => setDraftAmount(e.target.value)}
-              onBlur={() => onChange(status, draftAmount ? Number(draftAmount) : null, draftPaid ? Number(draftPaid) : paid)}
+              onBlur={() => onChange(status, draftAmount ? Number(draftAmount) : null)}
               placeholder="Сума"
               title="Загальна сума"
               className="w-[64px] rounded-[7px] border border-line px-1.5 py-1 text-[11.5px] outline-none focus:border-purple"
             />
-            <input
-              type="number"
-              min={0}
-              value={draftPaid}
-              onChange={(e) => setDraftPaid(e.target.value)}
-              onBlur={() => onChange(status, draftAmount ? Number(draftAmount) : amount, draftPaid ? Number(draftPaid) : 0)}
-              placeholder="Внесено"
-              title="Скільки вже сплачено"
-              className="w-[64px] rounded-[7px] border border-line px-1.5 py-1 text-[11.5px] outline-none focus:border-purple"
-            />
+            <span className="whitespace-nowrap text-[10.5px] text-ink-soft" title="Завдаток + доплата">
+              внесено {paid} ₴
+            </span>
           </>
         )}
       </div>
@@ -243,6 +237,73 @@ function OrderCell({
         <span className="text-[10.5px] text-warn">Залишок: {remaining} ₴</span>
       )}
     </div>
+  );
+}
+
+/** Сума, що зберігається при виході з поля (завдаток / доплата). */
+function MoneyCell({ value, onSave }: { value: number | null; onSave: (next: number | null) => void }) {
+  const [draft, setDraft] = useState(value != null ? String(value) : "");
+  useEffect(() => {
+    setDraft(value != null ? String(value) : "");
+  }, [value]);
+  return (
+    <input
+      type="number"
+      min={0}
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => {
+        const next = draft === "" ? null : Number(draft);
+        if (next !== value) onSave(next);
+      }}
+      placeholder="-"
+      className="w-[72px] rounded-[7px] border border-line px-1.5 py-1 text-[12px] outline-none focus:border-purple"
+    />
+  );
+}
+
+/** Час зйомки — адмін може поставити будь-який; помилка, якщо він зайнятий іншою дитиною. */
+function TimeCell({ value, onSave }: { value: string | null; onSave: (next: string | null) => Promise<string | null> }) {
+  const [draft, setDraft] = useState(value ?? "");
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    setDraft(value ?? "");
+  }, [value]);
+  return (
+    <div className="flex flex-col gap-0.5">
+      <input
+        type="time"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={async () => {
+          if ((draft || null) === value) return;
+          const err = await onSave(draft || null);
+          setError(err);
+          if (err) setDraft(value ?? "");
+        }}
+        className="w-[92px] rounded-[7px] border border-line px-1.5 py-1 text-[12px] outline-none focus:border-purple"
+      />
+      {error && <span className="max-w-[140px] text-[10px] font-semibold leading-tight text-warn">{error}</span>}
+    </div>
+  );
+}
+
+/** Копіює персональне посилання кабінету дитини. */
+function PersonalLinkButton({ token }: { token: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      onClick={async () => {
+        await navigator.clipboard.writeText(`${SITE_URL}/k/${token}`);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      }}
+      title="Скопіювати персональне посилання для батьків"
+      className="ml-1.5 inline-flex items-center gap-0.5 rounded-full border border-line bg-page px-1.5 py-0.5 text-[10px] font-semibold text-purple hover:border-purple"
+    >
+      {copied ? <Check className="h-3 w-3" /> : <Link2 className="h-3 w-3" />}
+      {copied ? "Скопійовано" : "Посилання"}
+    </button>
   );
 }
 
@@ -277,7 +338,7 @@ function AddStudentRow({ colSpan, onAdd }: { colSpan: number; onAdd: (firstName:
   return (
     <tr className="border-b border-line bg-page/60">
       <td className="py-2 pr-2 text-ink-soft">+</td>
-      <td className="pr-3">
+      <td className="pr-3" colSpan={2}>
         <div className="flex flex-wrap items-center gap-1.5">
           <input
             value={lastName}
@@ -330,6 +391,7 @@ function AddStudentRow({ colSpan, onAdd }: { colSpan: number; onAdd: (firstName:
 export function CrmGrid({ classId }: { classId: string }) {
   const [slots, setSlots] = useState<Slot[] | null>(null);
   const [students, setStudents] = useState<Student[] | null>(null);
+  const [questions, setQuestions] = useState<Question[]>([]);
   const [pickerFor, setPickerFor] = useState<{ studentId: string; slot: Slot } | null>(null);
 
   function refetch() {
@@ -338,11 +400,27 @@ export function CrmGrid({ classId }: { classId: string }) {
       .then((data) => {
         setSlots(data.slots ?? []);
         setStudents(data.students ?? []);
+        setQuestions(data.questions ?? []);
       });
   }
 
   useEffect(() => {
     refetch();
+    // Зміни від батьків (кабінет) і інших адмінів — без перезавантаження сторінки.
+    const supabase = createSupabaseBrowserClient();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const channel = supabase
+      .channel(classChannel(classId))
+      .on("broadcast", { event: "changed" }, () => {
+        clearTimeout(timer);
+        timer = setTimeout(refetch, 300);
+      })
+      .subscribe();
+    return () => {
+      clearTimeout(timer);
+      supabase.removeChannel(channel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [classId]);
 
   async function saveAnswer(studentId: string, slotId: string, answer: string) {
@@ -355,17 +433,33 @@ export function CrmGrid({ classId }: { classId: string }) {
     );
   }
 
-  async function saveOrder(studentId: string, status: OrderStatus, amount: number | null, paid: number) {
+  async function saveOrder(studentId: string, status: OrderStatus, amount: number | null) {
     setStudents((prev) =>
-      (prev ?? []).map((s) => (s.id === studentId ? { ...s, order_status: status, order_amount: amount, paid_amount: paid } : s))
+      (prev ?? []).map((s) => (s.id === studentId ? { ...s, order_status: status, order_amount: amount } : s))
     );
     const res = await fetch(`/api/students/${studentId}/order`, {
       method: "PUT",
-      body: JSON.stringify({ status, amount, paidAmount: paid }),
+      body: JSON.stringify({ status, amount }),
     });
     const data = await res.json().catch(() => null);
     // Сервер міг сам підставити дефолтну суму (з ціни типу альбому) — синхронізуємось.
     if (data) await refetch();
+  }
+
+  async function saveQuestionAnswer(studentId: string, key: string, answer: string) {
+    await fetch(`/api/students/${studentId}/answers`, { method: "PUT", body: JSON.stringify({ key, answer }) });
+    setStudents((prev) =>
+      (prev ?? []).map((s) => (s.id === studentId ? { ...s, answers: { ...s.answers, [key]: answer } } : s))
+    );
+  }
+
+  /** Повертає текст помилки або null. */
+  async function patchStudent(studentId: string, body: Record<string, unknown>) {
+    const res = await fetch(`/api/students/${studentId}`, { method: "PATCH", body: JSON.stringify(body) });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return (data.error as string) ?? "Не вдалося зберегти";
+    await refetch();
+    return null;
   }
 
   async function savePhotos(studentId: string, slot: Slot, photoIds: string[]) {
@@ -410,14 +504,9 @@ export function CrmGrid({ classId }: { classId: string }) {
     return <p className="text-sm text-ink-soft">Завантажуємо…</p>;
   }
 
-  if (slots.length === 0) {
-    return (
-      <p className="text-sm text-ink-soft">
-        У типу альбому цього класу ще немає жодного слоту — додай на «Типи альбомів» → обраний
-        тип → «Слоти CRM».
-      </p>
-    );
-  }
+  const hasSlots = slots.length > 0;
+  // Колонки після імені: прогрес (лише зі слотами), замовлення, завдаток, доплата, слоти, анкета.
+  const extraCols = (hasSlots ? 1 : 0) + 3 + slots.length + questions.length;
 
   return (
     <div className="overflow-x-auto">
@@ -425,15 +514,27 @@ export function CrmGrid({ classId }: { classId: string }) {
         <thead>
           <tr className="border-b-[1.5px] border-line text-left text-[11px] font-bold text-ink-soft">
             <th className="py-2.5 pr-3">#</th>
+            <th className="whitespace-nowrap pr-3">
+              <span className="inline-flex items-center gap-1">
+                <Clock className="h-3.5 w-3.5" /> Час
+              </span>
+            </th>
             <th className="whitespace-nowrap pr-5">Прізвище та ім'я</th>
-            <th className="whitespace-nowrap pr-5">Прогрес</th>
+            {hasSlots && <th className="whitespace-nowrap pr-5">Прогрес</th>}
             <th className="whitespace-nowrap pr-5">Замовлення</th>
+            <th className="whitespace-nowrap pr-3">Завдаток</th>
+            <th className="whitespace-nowrap pr-5">Доплата</th>
             {slots.map((slot) => (
               <th key={slot.id} className="whitespace-nowrap px-3">
                 <span className="inline-flex items-center gap-1">
                   {slot.kind === "photo" ? <Camera className="h-3.5 w-3.5" /> : <FileText className="h-3.5 w-3.5" />}
                   {slot.label}
                 </span>
+              </th>
+            ))}
+            {questions.map((q) => (
+              <th key={q.key} className="whitespace-nowrap px-3">
+                {q.label}
               </th>
             ))}
             <th className="px-3"></th>
@@ -443,6 +544,9 @@ export function CrmGrid({ classId }: { classId: string }) {
           {students.map((student, i) => (
             <tr key={student.id} className="border-b border-line align-middle">
               <td className="py-3 pr-3 text-ink-soft">{i + 1}</td>
+              <td className="pr-3">
+                <TimeCell value={student.shoot_time} onSave={(next) => patchStudent(student.id, { shootTime: next })} />
+              </td>
               <td className="whitespace-nowrap pr-5 font-semibold">
                 {student.last_name} {student.first_name}
                 {student.staff_role && (
@@ -450,7 +554,9 @@ export function CrmGrid({ classId }: { classId: string }) {
                     {student.staff_role}
                   </span>
                 )}
+                <PersonalLinkButton token={student.access_token} />
               </td>
+              {hasSlots && (
               <td className="whitespace-nowrap pr-5">
                 <ProgressBar done={progressByStudent.get(student.id) ?? 0} total={slots.length} />
                 {student.selection_confirmed_at && (
@@ -462,12 +568,22 @@ export function CrmGrid({ classId }: { classId: string }) {
                   </span>
                 )}
               </td>
+              )}
               <td className="whitespace-nowrap pr-5">
                 <OrderCell
                   status={student.order_status}
                   amount={student.order_amount}
                   paid={student.paid_amount}
-                  onChange={(status, amount, paid) => saveOrder(student.id, status, amount, paid)}
+                  onChange={(status, amount) => saveOrder(student.id, status, amount)}
+                />
+              </td>
+              <td className="pr-3">
+                <MoneyCell value={student.deposit_amount} onSave={(v) => patchStudent(student.id, { depositAmount: v })} />
+              </td>
+              <td className="pr-5">
+                <MoneyCell
+                  value={student.extra_payment_amount}
+                  onSave={(v) => patchStudent(student.id, { extraPaymentAmount: v })}
                 />
               </td>
               {slots.map((slot) => {
@@ -489,6 +605,15 @@ export function CrmGrid({ classId }: { classId: string }) {
                   </td>
                 );
               })}
+              {questions.map((q) => (
+                <td key={q.key} className="px-3 py-3">
+                  <TextCell
+                    value={student.answers[q.key] ?? ""}
+                    filledByStudent={false}
+                    onSave={(next) => saveQuestionAnswer(student.id, q.key, next)}
+                  />
+                </td>
+              ))}
               <td className="px-3">
                 <button
                   onClick={() => handleDeleteStudent(student.id, `${student.last_name} ${student.first_name}`)}
@@ -500,7 +625,7 @@ export function CrmGrid({ classId }: { classId: string }) {
               </td>
             </tr>
           ))}
-          <AddStudentRow colSpan={slots.length + 2} onAdd={handleAddStudent} />
+          <AddStudentRow colSpan={extraCols + 1} onAdd={handleAddStudent} />
         </tbody>
       </table>
 

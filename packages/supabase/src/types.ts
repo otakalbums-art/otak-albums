@@ -127,6 +127,12 @@ export type Database = {
           referral_code: string;
           status: ClassStatus;
           created_at: string;
+          shoot_date: string | null;
+          slot_start: string | null;
+          slot_end: string | null;
+          slot_interval_min: number;
+          parent_editing_enabled: boolean;
+          questions: Json;
         };
         Insert: {
           id?: string;
@@ -136,6 +142,12 @@ export type Database = {
           referral_code: string;
           status?: ClassStatus;
           created_at?: string;
+          shoot_date?: string | null;
+          slot_start?: string | null;
+          slot_end?: string | null;
+          slot_interval_min?: number;
+          parent_editing_enabled?: boolean;
+          questions?: Json;
         };
         Update: {
           id?: string;
@@ -145,10 +157,30 @@ export type Database = {
           referral_code?: string;
           status?: ClassStatus;
           created_at?: string;
+          shoot_date?: string | null;
+          slot_start?: string | null;
+          slot_end?: string | null;
+          slot_interval_min?: number;
+          parent_editing_enabled?: boolean;
+          questions?: Json;
         };
         Relationships: [
           { foreignKeyName: "classes_school_id_fkey"; columns: ["school_id"]; isOneToOne: false; referencedRelation: "schools"; referencedColumns: ["id"] },
           { foreignKeyName: "classes_album_type_id_fkey"; columns: ["album_type_id"]; isOneToOne: false; referencedRelation: "album_types"; referencedColumns: ["id"] }
+        ];
+      };
+      student_answers: {
+        Row: { student_id: string; question_key: string; answer: string; updated_at: string };
+        Insert: { student_id: string; question_key: string; answer?: string; updated_at?: string };
+        Update: { student_id?: string; question_key?: string; answer?: string; updated_at?: string };
+        Relationships: [
+          {
+            foreignKeyName: "student_answers_student_id_fkey";
+            columns: ["student_id"];
+            isOneToOne: false;
+            referencedRelation: "students";
+            referencedColumns: ["id"];
+          },
         ];
       };
       students: {
@@ -169,6 +201,10 @@ export type Database = {
           staff_role: string | null;
           selection_confirmed_at: string | null;
           first_login_at: string | null;
+          access_token: string;
+          shoot_time: string | null;
+          deposit_amount: number | null;
+          extra_payment_amount: number | null;
         };
         Insert: {
           id?: string;
@@ -187,6 +223,10 @@ export type Database = {
           staff_role?: string | null;
           selection_confirmed_at?: string | null;
           first_login_at?: string | null;
+          access_token?: string;
+          shoot_time?: string | null;
+          deposit_amount?: number | null;
+          extra_payment_amount?: number | null;
         };
         Update: {
           id?: string;
@@ -205,6 +245,10 @@ export type Database = {
           staff_role?: string | null;
           selection_confirmed_at?: string | null;
           first_login_at?: string | null;
+          access_token?: string;
+          shoot_time?: string | null;
+          deposit_amount?: number | null;
+          extra_payment_amount?: number | null;
         };
         Relationships: [
           { foreignKeyName: "students_class_id_fkey"; columns: ["class_id"]; isOneToOne: false; referencedRelation: "classes"; referencedColumns: ["id"] }

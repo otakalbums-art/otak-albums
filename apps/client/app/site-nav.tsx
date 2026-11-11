@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 
 const LINKS = [
+  { href: "/cabinet", label: "Кабінет" },
   { href: "/gallery", label: "Галерея" },
   { href: "/album", label: "Сформувати альбом" },
   { href: "/profile", label: "Мій профіль" },
@@ -18,7 +19,7 @@ const LINKS = [
  */
 export function SiteNav() {
   const pathname = usePathname();
-  if (pathname.startsWith("/login")) return null;
+  if (pathname.startsWith("/login") || pathname.startsWith("/link-invalid") || pathname.startsWith("/mom-link")) return null;
 
   return (
     <nav className="mb-5 flex flex-wrap gap-1.5 border-b border-line pb-3.5">

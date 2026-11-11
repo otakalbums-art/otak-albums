@@ -3,9 +3,40 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Archive, ArchiveRestore, Loader2, Trash2 } from "lucide-react";
+import { Toggle } from "@otak/ui";
 
 const btn =
   "inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-line bg-page px-2.5 py-1.5 text-[11.5px] font-semibold transition-colors disabled:opacity-50";
+
+/** Перемикач "батьки можуть редагувати свої дані" для класу/групи. */
+export function ParentEditingToggle({ classId, enabled }: { classId: string; enabled: boolean }) {
+  const router = useRouter();
+  const [value, setValue] = useState(enabled);
+  const [busy, setBusy] = useState(false);
+
+  async function change(next: boolean) {
+    setValue(next);
+    setBusy(true);
+    const res = await fetch(`/api/classes/${classId}/settings`, {
+      method: "PATCH",
+      body: JSON.stringify({ parentEditingEnabled: next }),
+    });
+    setBusy(false);
+    if (!res.ok) {
+      setValue(!next);
+      alert("Не вдалося змінити дозвіл на редагування");
+      return;
+    }
+    router.refresh();
+  }
+
+  return (
+    <span className="inline-flex items-center gap-1.5" title="Чи можуть батьки змінювати дані дитини за персональним посиланням">
+      <Toggle checked={value} onChange={change} disabled={busy} aria-label="Редагування батьками" />
+      <span className="text-[10.5px] text-ink-soft">{value ? "Відкрито" : "Закрито"}</span>
+    </span>
+  );
+}
 
 /** Архівувати / повернути з архіву / видалити остаточно — для одного рядка класу. */
 export function ClassRowActions({

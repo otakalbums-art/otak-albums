@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServiceRoleClient } from "@otak/supabase/server";
 import { requireAdmin } from "@/lib/require-admin";
+import { broadcastStudentChange } from "@/lib/class-realtime";
 
 /**
  * PUT /api/students/[studentId]/slots/[slotId]/photos
@@ -54,5 +55,6 @@ export async function PUT(req: Request, { params }: { params: { studentId: strin
   // не відповідати тому, що учень бачив на екрані, коли тиснув "Підтвердити".
   await service.from("students").update({ selection_confirmed_at: null }).eq("id", params.studentId);
 
+  await broadcastStudentChange(params.studentId);
   return NextResponse.json({ ok: true });
 }

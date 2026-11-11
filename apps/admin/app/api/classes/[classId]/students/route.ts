@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServiceRoleClient } from "@otak/supabase/server";
 import { requireAdmin } from "@/lib/require-admin";
+import { broadcastClassChange } from "@/lib/class-realtime";
 
 /**
  * POST /api/classes/[classId]/students — додати учня (або персонал —
@@ -41,5 +42,6 @@ export async function POST(req: Request, { params }: { params: { classId: string
     return NextResponse.json({ error: message }, { status: 400 });
   }
 
+  await broadcastClassChange(params.classId);
   return NextResponse.json({ student });
 }

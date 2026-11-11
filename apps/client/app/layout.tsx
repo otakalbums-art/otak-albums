@@ -1,11 +1,15 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { SiteNav } from "./site-nav";
 
 export const metadata: Metadata = {
   title: "Otak Albums — платформа для випускних фотозйомок",
-  description: "Клієнтський сайт для учнів: галерея, обране, відбір фото для альбому.",
+  description: "Кабінет дитини, галерея, обране, відбір фото для альбому.",
+  // Встановлений на головний екран (iOS) — без рамки браузера.
+  appleWebApp: { capable: true, title: "Otak Albums", statusBarStyle: "default" },
 };
+
+export const viewport: Viewport = { themeColor: "#460464", width: "device-width", initialScale: 1 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

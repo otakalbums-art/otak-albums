@@ -3,7 +3,7 @@ import { createSupabaseServerClient } from "@otak/supabase/server";
 import { CreateClassForm } from "./create-class-form";
 import { ReferralLinkCell } from "./referral-link-cell";
 import { Archive, ClipboardList, Images, Upload } from "lucide-react";
-import { ClassRowActions } from "./class-row-actions";
+import { ClassRowActions, ParentEditingToggle } from "./class-row-actions";
 
 /**
  * Список класів + створення нової "папки класу" (POST /api/classes) —
@@ -19,7 +19,7 @@ export default async function ClassesPage() {
   const supabase = createSupabaseServerClient();
   const { data: classes } = await supabase
     .from("classes")
-    .select("id, name, referral_code, status, schools(name), photos(id)")
+    .select("id, name, referral_code, status, parent_editing_enabled, schools(name), photos(id)")
     .order("created_at", { ascending: false });
 
   const { data: schools } = await supabase.from("schools").select("id, name").order("name");
@@ -89,10 +89,11 @@ function ClassesTable({ classes }: { classes: any[] }) {
     <div className="overflow-x-auto">
       <table className="w-full table-fixed text-[13px]">
         <colgroup>
+          <col className="w-[15%]" />
+          <col className="w-[5%]" />
           <col className="w-[16%]" />
-          <col className="w-[6%]" />
-          <col className="w-[17%]" />
           <col className="w-[8%]" />
+          <col className="w-[10%]" />
           <col />
         </colgroup>
         <thead>
@@ -101,6 +102,7 @@ function ClassesTable({ classes }: { classes: any[] }) {
             <th className="px-3 py-2">Фото</th>
             <th className="px-3 py-2">Реф. посилання</th>
             <th className="px-3 py-2">Статус</th>
+            <th className="px-3 py-2">Редагування батьками</th>
             <th className="px-3 py-2"></th>
           </tr>
         </thead>
@@ -116,6 +118,9 @@ function ClassesTable({ classes }: { classes: any[] }) {
               </td>
               <td className="px-3 py-2.5">
                 <StatusCell status={c.status} />
+              </td>
+              <td className="px-3 py-2.5">
+                {c.status !== "archived" && <ParentEditingToggle classId={c.id} enabled={c.parent_editing_enabled} />}
               </td>
               <td className="px-3 py-2.5">
                 <div className="flex flex-wrap gap-1.5">
@@ -142,7 +147,7 @@ function ClassesTable({ classes }: { classes: any[] }) {
           ))}
           {classes.length === 0 && (
             <tr>
-              <td colSpan={5} className="px-3 py-4 text-ink-soft">
+              <td colSpan={6} className="px-3 py-4 text-ink-soft">
                 Активних класів немає.
               </td>
             </tr>

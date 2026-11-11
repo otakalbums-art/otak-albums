@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServiceRoleClient } from "@otak/supabase/server";
 import { requireAdmin } from "@/lib/require-admin";
+import { broadcastStudentChange } from "@/lib/class-realtime";
 
 /**
  * PUT /api/students/[studentId]/slots/[slotId]/answer
@@ -42,5 +43,6 @@ export async function PUT(req: Request, { params }: { params: { studentId: strin
     );
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+  await broadcastStudentChange(params.studentId);
   return NextResponse.json({ ok: true });
 }

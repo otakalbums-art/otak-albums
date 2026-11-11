@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServiceRoleClient } from "@otak/supabase/server";
 import { requireAdmin } from "@/lib/require-admin";
+import { parseQuestions } from "@otak/supabase/cabinet";
 
 /**
  * GET /api/classes/[classId]/crm — CRM-таблиця класу: слоти типу альбому
@@ -18,31 +19,38 @@ export async function GET(_req: Request, { params }: { params: { classId: string
 
   const { data: klass } = await service
     .from("classes")
-    .select("id, album_type_id")
+    .select("id, album_type_id, questions")
     .eq("id", params.classId)
     .maybeSingle();
 
   if (!klass) return NextResponse.json({ error: "Клас не знайдено" }, { status: 404 });
-  if (!klass.album_type_id) return NextResponse.json({ slots: [], students: [] });
+  const questions = parseQuestions(klass.questions);
 
-  const { data: slots } = await service
-    .from("album_type_slots")
-    .select("id, key, label, kind, max_photos, filled_by, sort_order")
-    .eq("album_type_id", klass.album_type_id)
-    .order("sort_order");
+  // Без обраного альбому слотів немає, але список дітей, час, анкета й оплати
+  // все одно потрібні — їх вносять ще до фотосесії.
+  const { data: slots } = klass.album_type_id
+    ? await service
+        .from("album_type_slots")
+        .select("id, key, label, kind, max_photos, filled_by, sort_order")
+        .eq("album_type_id", klass.album_type_id)
+        .order("sort_order")
+    : { data: [] as any[] };
 
   const { data: students } = await service
     .from("students")
-    .select("id, first_name, last_name, is_staff, staff_role, order_status, order_amount, paid_amount, selection_confirmed_at")
+    .select(
+      "id, first_name, last_name, is_staff, staff_role, order_status, order_amount, paid_amount, selection_confirmed_at, access_token, shoot_time, deposit_amount, extra_payment_amount"
+    )
     .eq("class_id", params.classId)
     .order("is_staff")
+    .order("shoot_time", { nullsFirst: false })
     .order("last_name")
     .order("first_name");
 
   const studentIds = (students ?? []).map((s: any) => s.id);
   const slotIds = (slots ?? []).map((s: any) => s.id);
 
-  const [{ data: slotPhotos }, { data: slotAnswers }] = await Promise.all([
+  const [{ data: slotPhotos }, { data: slotAnswers }, { data: answers }] = await Promise.all([
     studentIds.length && slotIds.length
       ? service
           .from("student_slot_photos")
@@ -58,7 +66,17 @@ export async function GET(_req: Request, { params }: { params: { classId: string
           .in("student_id", studentIds)
           .in("slot_id", slotIds)
       : Promise.resolve({ data: [] as any[] }),
+    studentIds.length
+      ? service.from("student_answers").select("student_id, question_key, answer").in("student_id", studentIds)
+      : Promise.resolve({ data: [] as any[] }),
   ]);
+
+  const answersByStudent = new Map<string, Record<string, string>>();
+  for (const a of answers ?? []) {
+    const bucket = answersByStudent.get(a.student_id) ?? {};
+    bucket[a.question_key] = a.answer;
+    answersByStudent.set(a.student_id, bucket);
+  }
 
   // Signed URLs для всіх фото, задіяних у слотах — одним батчем, як і в
   // /api/classes/[classId]/photos.
@@ -101,8 +119,13 @@ export async function GET(_req: Request, { params }: { params: { classId: string
     order_amount: s.order_amount,
     paid_amount: s.paid_amount,
     selection_confirmed_at: s.selection_confirmed_at,
+    access_token: s.access_token,
+    shoot_time: s.shoot_time ? String(s.shoot_time).slice(0, 5) : null,
+    deposit_amount: s.deposit_amount,
+    extra_payment_amount: s.extra_payment_amount,
+    answers: answersByStudent.get(s.id) ?? {},
     values: valuesByStudent.get(s.id) ?? {},
   }));
 
-  return NextResponse.json({ slots: slots ?? [], students: mappedStudents });
+  return NextResponse.json({ slots: slots ?? [], students: mappedStudents, questions, hasAlbumType: !!klass.album_type_id });
 }
