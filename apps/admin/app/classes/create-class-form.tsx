@@ -5,7 +5,18 @@ import { useRouter } from "next/navigation";
 import { Button } from "@otak/ui";
 
 type School = { id: string; name: string };
-type AlbumType = { id: string; name: string };
+type AlbumType = { id: string; name: string; category: string | null };
+
+/** Типи вже відсортовані сервером — групуємо за категорією в порядку першої появи. */
+function groupByCategory(types: AlbumType[]): [string, AlbumType[]][] {
+  const groups = new Map<string, AlbumType[]>();
+  for (const t of types) {
+    const key = t.category?.trim() || "Без категорії";
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(t);
+  }
+  return Array.from(groups.entries());
+}
 
 export function CreateClassForm({ schools, albumTypes }: { schools: School[]; albumTypes: AlbumType[] }) {
   const router = useRouter();
@@ -96,10 +107,14 @@ export function CreateClassForm({ schools, albumTypes }: { schools: School[]; al
             className="w-full rounded-[9px] border border-line px-2.5 py-1.5 text-xs outline-none focus:border-purple"
           >
             <option value="">— Без типу —</option>
-            {albumTypes.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
+            {groupByCategory(albumTypes).map(([category, types]) => (
+              <optgroup key={category} label={category}>
+                {types.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </optgroup>
             ))}
           </select>
         </div>

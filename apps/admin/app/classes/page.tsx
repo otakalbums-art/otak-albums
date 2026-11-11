@@ -21,7 +21,11 @@ export default async function ClassesPage() {
     .order("created_at", { ascending: false });
 
   const { data: schools } = await supabase.from("schools").select("id, name").order("name");
-  const { data: albumTypes } = await supabase.from("album_types").select("id, name").order("name");
+  const { data: albumTypes } = await supabase
+    .from("album_types")
+    .select("id, name, category")
+    .order("sort_order")
+    .order("created_at");
 
   return (
     <div>

@@ -14,7 +14,7 @@ const SLOT_GROUPS: { field: string; label: string }[] = [
 
 /**
  * POST /api/album-types — створити тип альбому.
- * Body: { name, pageCount?, price?, costPrice?,
+ * Body: { name, category?, sortOrder?, pageCount?, price?, costPrice?,
  *         portraitCount?, studioCount?, schoolCount?, outsideSchoolCount? }
  *
  * Кількості одразу генерують відповідні album_type_slots ("Портрет 1",
@@ -26,14 +26,29 @@ export async function POST(req: Request) {
   if (!user) return NextResponse.json({ error: "Доступ заборонено" }, { status: 403 });
 
   const body = await req.json();
-  const { name, pageCount, price, costPrice } = body;
+  const { name, category, sortOrder: typeSortOrder, pageCount, price, costPrice } = body;
   if (!name?.trim()) return NextResponse.json({ error: "Вкажіть назву типу альбому" }, { status: 400 });
 
   const service = createSupabaseServiceRoleClient();
+
+  // Без явного порядку — новий тип стає в кінець списку.
+  let resolvedSortOrder = Number(typeSortOrder);
+  if (typeSortOrder === undefined || typeSortOrder === "" || Number.isNaN(resolvedSortOrder)) {
+    const { data: last } = await service
+      .from("album_types")
+      .select("sort_order")
+      .order("sort_order", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    resolvedSortOrder = (last?.sort_order ?? 0) + 10;
+  }
+
   const { data: albumType, error } = await service
     .from("album_types")
     .insert({
       name: name.trim(),
+      category: category?.trim() || null,
+      sort_order: resolvedSortOrder,
       page_count: pageCount ? Number(pageCount) : null,
       price: price ? Number(price) : null,
       cost_price: costPrice ? Number(costPrice) : null,

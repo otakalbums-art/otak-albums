@@ -79,6 +79,8 @@ export type Database = {
           created_at: string;
           price: number | null;
           cost_price: number | null;
+          category: string | null;
+          sort_order: number;
         };
         Insert: {
           id?: string;
@@ -88,6 +90,8 @@ export type Database = {
           created_at?: string;
           price?: number | null;
           cost_price?: number | null;
+          category?: string | null;
+          sort_order?: number;
         };
         Update: {
           id?: string;
@@ -97,7 +101,21 @@ export type Database = {
           created_at?: string;
           price?: number | null;
           cost_price?: number | null;
+          category?: string | null;
+          sort_order?: number;
         };
+        Relationships: [];
+      };
+      album_options: {
+        Row: { id: string; category: string | null; name: string; price: number | null; sort_order: number; created_at: string };
+        Insert: { id?: string; category?: string | null; name: string; price?: number | null; sort_order?: number; created_at?: string };
+        Update: { id?: string; category?: string | null; name?: string; price?: number | null; sort_order?: number; created_at?: string };
+        Relationships: [];
+      };
+      album_small_run_markups: {
+        Row: { id: string; min_albums: number | null; max_albums: number | null; surcharge: number; sort_order: number; created_at: string };
+        Insert: { id?: string; min_albums?: number | null; max_albums?: number | null; surcharge: number; sort_order?: number; created_at?: string };
+        Update: { id?: string; min_albums?: number | null; max_albums?: number | null; surcharge?: number; sort_order?: number; created_at?: string };
         Relationships: [];
       };
       classes: {

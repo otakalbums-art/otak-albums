@@ -17,6 +17,7 @@ export function AlbumTypeCreateForm() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
+  const [category, setCategory] = useState("");
   const [pageCount, setPageCount] = useState("");
   const [price, setPrice] = useState("");
   const [costPrice, setCostPrice] = useState("");
@@ -42,6 +43,7 @@ export function AlbumTypeCreateForm() {
       method: "POST",
       body: JSON.stringify({
         name,
+        category: category || undefined,
         pageCount: pageCount || undefined,
         price: price || undefined,
         costPrice: costPrice || undefined,
@@ -61,6 +63,7 @@ export function AlbumTypeCreateForm() {
 
     setOpen(false);
     setName("");
+    setCategory("");
     setPageCount("");
     setPrice("");
     setCostPrice("");
@@ -81,13 +84,23 @@ export function AlbumTypeCreateForm() {
 
   return (
     <div className="mb-3.5 flex flex-col gap-3 rounded-[11px] border border-line p-3.5">
-      <div className="grid gap-2.5 sm:grid-cols-2">
+      <div className="grid gap-2.5 sm:grid-cols-3">
+        <div>
+          <label className="mb-1 block text-[11px] font-semibold text-ink-soft">Категорія</label>
+          <input
+            list="album-categories"
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+            placeholder="Садочок"
+            className="w-full rounded-[9px] border border-line px-2.5 py-1.5 text-xs outline-none focus:border-purple"
+          />
+        </div>
         <div>
           <label className="mb-1 block text-[11px] font-semibold text-ink-soft">Назва</label>
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Стандарт"
+            placeholder="Альбом на одну фотосесію"
             className="w-full rounded-[9px] border border-line px-2.5 py-1.5 text-xs outline-none focus:border-purple"
           />
         </div>

@@ -7,6 +7,8 @@ import { AlbumTypeEditForm } from "./album-type-edit-form";
 type AlbumType = {
   id: string;
   name: string;
+  category: string | null;
+  sort_order: number;
   page_count: number | null;
   price: number | null;
   cost_price: number | null;
@@ -44,7 +46,7 @@ export function AlbumTypeCard({ albumType, classesCount }: { albumType: AlbumTyp
         {albumType.page_count ? `${albumType.page_count} сторінок · ` : ""}
         {(albumType.folder_template ?? []).map((f) => f.name).join(", ")}
       </p>
-      {albumType.price && (
+      {albumType.price != null && (
         <p className="mt-1 text-[12.5px] font-bold text-purple-deep">
           {albumType.price} ₴/екз.
           {albumType.cost_price ? <span className="ml-1 font-normal text-ink-soft">(собівартість {albumType.cost_price} ₴)</span> : null}

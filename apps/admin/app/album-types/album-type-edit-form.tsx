@@ -4,11 +4,21 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@otak/ui";
 
-type AlbumType = { id: string; name: string; page_count: number | null; price: number | null; cost_price: number | null };
+type AlbumType = {
+  id: string;
+  name: string;
+  category: string | null;
+  sort_order: number;
+  page_count: number | null;
+  price: number | null;
+  cost_price: number | null;
+};
 
 export function AlbumTypeEditForm({ albumType, onClose }: { albumType: AlbumType; onClose: () => void }) {
   const router = useRouter();
   const [name, setName] = useState(albumType.name);
+  const [category, setCategory] = useState(albumType.category ?? "");
+  const [sortOrder, setSortOrder] = useState(String(albumType.sort_order ?? 0));
   const [pageCount, setPageCount] = useState(albumType.page_count ? String(albumType.page_count) : "");
   const [price, setPrice] = useState(albumType.price ? String(albumType.price) : "");
   const [costPrice, setCostPrice] = useState(albumType.cost_price ? String(albumType.cost_price) : "");
@@ -20,7 +30,7 @@ export function AlbumTypeEditForm({ albumType, onClose }: { albumType: AlbumType
     setSaving(true);
     const res = await fetch(`/api/album-types/${albumType.id}`, {
       method: "PATCH",
-      body: JSON.stringify({ name, pageCount: pageCount || null, price: price || null, costPrice: costPrice || null }),
+      body: JSON.stringify({ name, category, sortOrder, pageCount: pageCount || null, price: price || null, costPrice: costPrice || null }),
     });
     const data = await res.json();
     setSaving(false);
@@ -42,6 +52,27 @@ export function AlbumTypeEditForm({ albumType, onClose }: { albumType: AlbumType
           onChange={(e) => setName(e.target.value)}
           className="w-full rounded-[8px] border border-line px-2 py-1.5 text-xs outline-none focus:border-purple"
         />
+      </div>
+      <div className="grid grid-cols-[1fr_80px] gap-2">
+        <div>
+          <label className="mb-1 block text-[10px] text-ink-soft">Категорія</label>
+          <input
+            list="album-categories"
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+            placeholder="Садочок"
+            className="w-full rounded-[8px] border border-line px-2 py-1.5 text-xs outline-none focus:border-purple"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-[10px] text-ink-soft" title="Менше число — вище у списку">Порядок</label>
+          <input
+            type="number"
+            value={sortOrder}
+            onChange={(e) => setSortOrder(e.target.value)}
+            className="w-full rounded-[8px] border border-line px-2 py-1.5 text-xs outline-none focus:border-purple"
+          />
+        </div>
       </div>
       <div className="grid grid-cols-3 gap-2">
         <div>
