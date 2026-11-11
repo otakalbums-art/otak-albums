@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@otak/ui";
+import { X } from "lucide-react";
 
 const inputCls = "w-full rounded-[8px] border border-line px-2 py-1.5 text-xs outline-none focus:border-purple";
 
@@ -86,7 +87,7 @@ function OptionRow({ option }: { option?: AlbumOption }) {
           )}
           {!isNew && (
             <button onClick={handleDelete} disabled={busy} aria-label="Видалити опцію" className="px-1 text-ink-soft hover:text-warn disabled:opacity-50">
-              ✕
+              <X className="h-3.5 w-3.5" />
             </button>
           )}
         </div>
@@ -166,7 +167,7 @@ function MarkupRow({ markup }: { markup?: SmallRunMarkup }) {
           )}
           {!isNew && (
             <button onClick={handleDelete} disabled={busy} aria-label="Видалити правило" className="px-1 text-ink-soft hover:text-warn disabled:opacity-50">
-              ✕
+              <X className="h-3.5 w-3.5" />
             </button>
           )}
         </div>

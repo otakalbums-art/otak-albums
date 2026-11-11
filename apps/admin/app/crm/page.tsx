@@ -1,5 +1,6 @@
 import { Card } from "@otak/ui";
 import { createSupabaseServerClient } from "@otak/supabase/server";
+import { ChevronRight } from "lucide-react";
 
 /**
  * Точка входу в CRM — вибір класу. Сама таблиця учень×слоти —
@@ -41,8 +42,8 @@ export default async function CrmIndexPage() {
                   <td className="text-ink-soft">{c.album_types?.name ?? "— не обрано —"}</td>
                   <td>{c.students?.length ?? 0}</td>
                   <td>
-                    <a href={`/classes/${c.id}/crm`} className="text-[12px] font-semibold text-purple hover:underline">
-                      Відкрити CRM →
+                    <a href={`/classes/${c.id}/crm`} className="inline-flex items-center gap-0.5 text-[12px] font-semibold text-purple hover:underline">
+                      Відкрити CRM <ChevronRight className="h-3.5 w-3.5" />
                     </a>
                   </td>
                 </tr>

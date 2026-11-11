@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlbumTypeEditForm } from "./album-type-edit-form";
+import { ChevronRight, Pencil, Trash2 } from "lucide-react";
 
 type AlbumType = {
   id: string;
@@ -54,19 +55,19 @@ export function AlbumTypeCard({ albumType, classesCount }: { albumType: AlbumTyp
       )}
 
       <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
-        <a href={`/album-types/${albumType.id}/slots`} className="text-[12px] font-semibold text-purple hover:underline">
-          Слоти CRM →
+        <a href={`/album-types/${albumType.id}/slots`} className="inline-flex items-center gap-0.5 text-[12px] font-semibold text-purple hover:underline">
+          Слоти CRM <ChevronRight className="h-3.5 w-3.5" />
         </a>
-        <button onClick={() => setEditing((v) => !v)} className="text-[12px] font-semibold text-purple hover:underline">
-          ✎ Редагувати
+        <button onClick={() => setEditing((v) => !v)} className="inline-flex items-center gap-1 text-[12px] font-semibold text-purple hover:underline">
+          <Pencil className="h-3 w-3" /> Редагувати
         </button>
         {classesCount > 0 ? (
-          <span className="text-[11.5px] text-ink-soft" title={`Використовується в ${classesCount} класах — спершу відв'яжіть їх`}>
-            🗑 Видалити (використовується в {classesCount} {classesCount === 1 ? "класі" : "класах"})
+          <span className="inline-flex items-center gap-1 text-[11.5px] text-ink-soft" title={`Використовується в ${classesCount} класах — спершу відв'яжіть їх`}>
+            <Trash2 className="h-3 w-3" /> Видалити (використовується в {classesCount} {classesCount === 1 ? "класі" : "класах"})
           </span>
         ) : (
-          <button onClick={handleDelete} disabled={deleting} className="text-[12px] font-semibold text-warn hover:underline disabled:opacity-50">
-            🗑 {deleting ? "Видаляємо…" : "Видалити"}
+          <button onClick={handleDelete} disabled={deleting} className="inline-flex items-center gap-1 text-[12px] font-semibold text-warn hover:underline disabled:opacity-50">
+            <Trash2 className="h-3 w-3" /> {deleting ? "Видаляємо…" : "Видалити"}
           </button>
         )}
       </div>

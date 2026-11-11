@@ -97,7 +97,7 @@ export async function notifyAdmins(supabase: ServiceClient, opts: NotifyOptions)
 export async function sendTestToAdmin(supabase: ServiceClient, adminId: string): Promise<void> {
   await sendToAdminIds(supabase, [adminId], {
     title: "Тестове сповіщення",
-    body: "Якщо ви це бачите — push працює 🎉",
+    body: "Якщо ви це бачите — push працює",
     url: "/",
   });
 }

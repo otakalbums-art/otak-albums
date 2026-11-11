@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Button } from "@otak/ui";
+import { Check } from "lucide-react";
 
 type Photo = { id: string; filename: string; url: string | null };
 type ClassPhoto = Photo & { file_kind: "jpeg" | "raw" };
@@ -132,7 +133,7 @@ export function PhotoPicker({
                   >
                     {isSelected && (
                       <span className="absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-purple text-[11px] font-bold text-white">
-                        ✓
+                        <Check className="h-3 w-3" strokeWidth={3} />
                       </span>
                     )}
                     <span className="absolute inset-x-0 bottom-0 truncate bg-gradient-to-t from-black/60 to-transparent px-1.5 pb-1 pt-3 font-mono text-[9px] text-white">

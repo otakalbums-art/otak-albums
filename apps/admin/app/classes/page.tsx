@@ -2,6 +2,7 @@ import { Card, StatusChip } from "@otak/ui";
 import { createSupabaseServerClient } from "@otak/supabase/server";
 import { CreateClassForm } from "./create-class-form";
 import { ReferralLinkCell } from "./referral-link-cell";
+import { ClipboardList, Images, Upload } from "lucide-react";
 
 /**
  * Список класів + створення нової "папки класу" (POST /api/classes) —
@@ -75,19 +76,19 @@ export default async function ClassesPage() {
                         href={`/classes/${c.id}/upload`}
                         className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-line bg-page px-2.5 py-1.5 text-[11.5px] font-semibold text-ink transition-colors hover:border-purple hover:text-purple"
                       >
-                        📤 Завантажити фото
+                        <Upload className="h-3.5 w-3.5" /> Завантажити фото
                       </a>
                       <a
                         href={`/classes/${c.id}/photos`}
                         className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-line bg-page px-2.5 py-1.5 text-[11.5px] font-semibold text-ink transition-colors hover:border-purple hover:text-purple"
                       >
-                        🖼️ Фото (JPEG + RAW)
+                        <Images className="h-3.5 w-3.5" /> Фото (JPEG + RAW)
                       </a>
                       <a
                         href={`/classes/${c.id}/crm`}
                         className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-line bg-page px-2.5 py-1.5 text-[11.5px] font-semibold text-ink transition-colors hover:border-purple hover:text-purple"
                       >
-                        📋 CRM
+                        <ClipboardList className="h-3.5 w-3.5" /> CRM
                       </a>
                     </div>
                   </td>

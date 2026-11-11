@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@otak/ui";
+import { Camera, FileText } from "lucide-react";
 
 type Slot = {
   id: string;
@@ -13,8 +14,18 @@ type Slot = {
   sort_order: number;
 };
 
-const KIND_LABEL: Record<Slot["kind"], string> = { photo: "📷 Фото", text: "📝 Текст" };
+const KIND_LABEL: Record<Slot["kind"], string> = { photo: "Фото", text: "Текст" };
+const KIND_ICON = { photo: Camera, text: FileText };
 const FILLED_BY_LABEL: Record<Slot["filled_by"], string> = { admin: "адмін", student: "учень" };
+
+function KindLabel({ kind }: { kind: Slot["kind"] }) {
+  const Icon = KIND_ICON[kind];
+  return (
+    <span className="inline-flex items-center gap-1">
+      <Icon className="h-3.5 w-3.5 text-ink-soft" /> {KIND_LABEL[kind]}
+    </span>
+  );
+}
 
 export function SlotsEditor({ albumTypeId, initialSlots }: { albumTypeId: string; initialSlots: Slot[] }) {
   const router = useRouter();
@@ -82,7 +93,9 @@ export function SlotsEditor({ albumTypeId, initialSlots }: { albumTypeId: string
             {initialSlots.map((s) => (
               <tr key={s.id} className="border-b border-line">
                 <td className="py-2.5 font-semibold">{s.label}</td>
-                <td>{KIND_LABEL[s.kind]}</td>
+                <td>
+                  <KindLabel kind={s.kind} />
+                </td>
                 <td className="text-ink-soft">
                   {s.kind === "photo" ? `до ${s.max_photos} фото` : `заповнює: ${FILLED_BY_LABEL[s.filled_by]}`}
                 </td>
@@ -126,8 +139,8 @@ export function SlotsEditor({ albumTypeId, initialSlots }: { albumTypeId: string
                 onChange={(e) => setKind(e.target.value as Slot["kind"])}
                 className="w-full rounded-[9px] border border-line px-2.5 py-1.5 text-xs outline-none focus:border-purple"
               >
-                <option value="photo">📷 Фото</option>
-                <option value="text">📝 Текст</option>
+                <option value="photo">Фото</option>
+                <option value="text">Текст</option>
               </select>
             </div>
             {kind === "photo" ? (

@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { Download, FolderOpen } from "lucide-react";
+import { CategoryIcon } from "@/lib/photo-categories";
 
 type Photo = {
   id: string;
@@ -18,11 +20,11 @@ type Photo = {
 // і в формі ручного завантаження (upload-form.tsx) — дублюємо тут навмисно,
 // це прості довідники, окремий спільний модуль для трьох рядків не виправданий.
 const CATEGORY_LABELS: Record<string, string> = {
-  portrait: "📷 Портрети",
-  group: "👥 Групові",
-  ceremony: "🎓 Церемонія",
-  personal: "🙂 Персональні",
-  uncategorized: "📁 Без категорії",
+  portrait: "Портрети",
+  group: "Групові",
+  ceremony: "Церемонія",
+  personal: "Персональні",
+  uncategorized: "Без категорії",
 };
 const CATEGORY_ORDER = ["portrait", "group", "ceremony", "personal", "uncategorized"];
 
@@ -103,7 +105,9 @@ function ShotTile({ shot }: { shot: Shot }) {
         style={hasPreview ? { backgroundImage: `url(${shot.jpeg!.url})` } : undefined}
       >
         {!hasPreview && (
-          <div className="flex h-full w-full items-center justify-center text-3xl text-purple-deep/40">🗂️</div>
+          <div className="flex h-full w-full items-center justify-center text-purple-deep/40">
+            <FolderOpen className="h-8 w-8" />
+          </div>
         )}
         <div className="absolute left-[7px] top-[7px] flex flex-wrap gap-1">
           {shot.jpeg && (
@@ -199,7 +203,10 @@ export function PhotosGallery({ classId }: { classId: string }) {
                 category === c ? "border-purple bg-purple-pale text-purple-deep" : "border-line bg-card text-ink hover:border-purple-soft"
               }`}
             >
-              {CATEGORY_LABELS[c]}
+              <span className="inline-flex items-center gap-1">
+                <CategoryIcon category={c} />
+                {CATEGORY_LABELS[c]}
+              </span>
             </button>
           ))}
         </div>
@@ -225,21 +232,21 @@ export function PhotosGallery({ classId }: { classId: string }) {
       <div className="mb-4 flex flex-wrap gap-2">
         <a
           href={`/api/classes/${classId}/photos/download?kind=all&category=${category}`}
-          className="rounded-[9px] border-[1.5px] border-purple bg-purple-pale px-3 py-1.5 text-[12px] font-bold text-purple-deep hover:bg-purple-soft"
+          className="inline-flex items-center gap-1 rounded-[9px] border-[1.5px] border-purple bg-purple-pale px-3 py-1.5 text-[12px] font-bold text-purple-deep hover:bg-purple-soft"
         >
-          ⬇ Завантажити все{category !== "all" ? ` (${CATEGORY_LABELS[category]})` : ""}
+          <Download className="h-3.5 w-3.5" /> Завантажити все{category !== "all" ? ` (${CATEGORY_LABELS[category]})` : ""}
         </a>
         <a
           href={`/api/classes/${classId}/photos/download?kind=jpeg&category=${category}`}
-          className="rounded-[9px] border-[1.5px] border-line bg-card px-3 py-1.5 text-[12px] font-bold text-ink hover:border-purple-soft"
+          className="inline-flex items-center gap-1 rounded-[9px] border-[1.5px] border-line bg-card px-3 py-1.5 text-[12px] font-bold text-ink hover:border-purple-soft"
         >
-          ⬇ Тільки JPEG
+          <Download className="h-3.5 w-3.5" /> Тільки JPEG
         </a>
         <a
           href={`/api/classes/${classId}/photos/download?kind=raw&category=${category}`}
-          className="rounded-[9px] border-[1.5px] border-line bg-card px-3 py-1.5 text-[12px] font-bold text-ink hover:border-purple-soft"
+          className="inline-flex items-center gap-1 rounded-[9px] border-[1.5px] border-line bg-card px-3 py-1.5 text-[12px] font-bold text-ink hover:border-purple-soft"
         >
-          ⬇ Тільки RAW
+          <Download className="h-3.5 w-3.5" /> Тільки RAW
         </a>
       </div>
 

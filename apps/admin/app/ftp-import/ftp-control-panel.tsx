@@ -2,22 +2,24 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Card, Toggle } from "@otak/ui";
+import { AlertTriangle, Camera, Check, Copy, Loader2, Pencil } from "lucide-react";
+import { CategoryIcon } from "@/lib/photo-categories";
 
 type ClassOption = { id: string; name: string; schoolName: string };
 type Creds = { username: string; password: string };
 
-const CATEGORY_SLOTS: { key: string; label: string; emoji: string }[] = [
-  { key: "portrait", label: "Портрети", emoji: "📷" },
-  { key: "group", label: "Групові", emoji: "👥" },
-  { key: "ceremony", label: "Церемонія", emoji: "🎓" },
-  { key: "personal", label: "Персональні", emoji: "🙂" },
-  { key: "uncategorized", label: "Без категорії", emoji: "📁" },
+const CATEGORY_SLOTS: { key: string; label: string }[] = [
+  { key: "portrait", label: "Портрети" },
+  { key: "group", label: "Групові" },
+  { key: "ceremony", label: "Церемонія" },
+  { key: "personal", label: "Персональні" },
+  { key: "uncategorized", label: "Без категорії" },
 ];
 
 const LABELS_STORAGE_KEY = "otak-ftp-category-labels";
 
-/** Емодзі + назва картки з олівцем — клік перемикає в режим редагування, Enter/blur зберігає. */
-function EditableTitle({ emoji, value, onChange }: { emoji: string; value: string; onChange: (next: string) => void }) {
+/** Іконка + назва картки з олівцем — клік перемикає в режим редагування, Enter/blur зберігає. */
+function EditableTitle({ category, value, onChange }: { category: string; value: string; onChange: (next: string) => void }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
 
@@ -34,7 +36,7 @@ function EditableTitle({ emoji, value, onChange }: { emoji: string; value: strin
   if (editing) {
     return (
       <span className="flex items-center gap-1.5">
-        <span>{emoji}</span>
+        <CategoryIcon category={category} className="h-4 w-4 text-purple" />
         <input
           autoFocus
           value={draft}
@@ -55,10 +57,9 @@ function EditableTitle({ emoji, value, onChange }: { emoji: string; value: strin
 
   return (
     <button onClick={() => setEditing(true)} className="flex items-center gap-1.5 hover:text-purple">
-      <span>
-        {emoji} {value}
-      </span>
-      <span className="text-[12px] text-ink-soft">✏️</span>
+      <CategoryIcon category={category} className="h-4 w-4 text-purple" />
+      <span>{value}</span>
+      <Pencil className="h-3 w-3 text-ink-soft" />
     </button>
   );
 }
@@ -80,8 +81,9 @@ function CopyField({ label, value }: { label: string; value: string }) {
         className="flex w-full items-center justify-between gap-2 rounded-[9px] border border-line bg-page px-3 py-2 text-left font-mono text-[13px] hover:border-purple"
       >
         <span className="truncate">{value}</span>
-        <span className="flex-shrink-0 text-[11px] font-bold text-purple">
-          {copied ? "✓ Скопійовано" : "📋 Копіювати"}
+        <span className="inline-flex flex-shrink-0 items-center gap-1 text-[11px] font-bold text-purple">
+          {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+          {copied ? "Скопійовано" : "Копіювати"}
         </span>
       </button>
     </div>
@@ -219,7 +221,11 @@ export function FtpControlPanel({
               <span className={`h-2 w-2 rounded-full ${status?.running ? "bg-ok" : "bg-ink-soft"}`} />
               {status === null ? "Перевіряємо…" : status.running ? "Прийом увімкнено" : "Прийом вимкнено"}
             </span>
-            {busy && <span className="text-xs text-ink-soft">⏳ Секунду…</span>}
+            {busy && (
+              <span className="inline-flex items-center gap-1 text-xs text-ink-soft">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" /> Секунду…
+              </span>
+            )}
           </div>
           <Toggle
             checked={!!status?.running}
@@ -230,21 +236,30 @@ export function FtpControlPanel({
         </div>
 
         {status?.unavailable && status.unavailableReason === "not_configured" && (
-          <p className="mt-3 rounded-[9px] bg-[#FFF4E5] p-2.5 text-xs text-ink">
-            ⚠️ Сервер прийому ще не підключено до цієї адмінки (не задано FTP_VM_HOST /
-            FTP_CONTROL_SECRET у Vercel).
+          <p className="mt-3 flex gap-1.5 rounded-[9px] bg-[#FFF4E5] p-2.5 text-xs text-ink">
+            <AlertTriangle className="mt-px h-3.5 w-3.5 flex-shrink-0 text-[#C77700]" />
+            <span>
+              Сервер прийому ще не підключено до цієї адмінки (не задано FTP_VM_HOST /
+              FTP_CONTROL_SECRET у Vercel).
+            </span>
           </p>
         )}
 
         {status?.unavailable && status.unavailableReason === "vm_unreachable" && (
-          <p className="mt-3 rounded-[9px] bg-[#FFE5E5] p-2.5 text-xs text-ink">
-            ⚠️ Не вдалось зв'язатись із сервером прийому — можливо, він зараз перезапускається
-            або лежить. Спробуй за хвилину; якщо не допомогло — звернись до розробника.
+          <p className="mt-3 flex gap-1.5 rounded-[9px] bg-[#FFE5E5] p-2.5 text-xs text-ink">
+            <AlertTriangle className="mt-px h-3.5 w-3.5 flex-shrink-0 text-warn" />
+            <span>
+              Не вдалось зв'язатись із сервером прийому — можливо, він зараз перезапускається
+              або лежить. Спробуй за хвилину; якщо не допомогло — звернись до розробника.
+            </span>
           </p>
         )}
 
         {toggleError && !status?.unavailable && (
-          <p className="mt-3 rounded-[9px] bg-[#FFE5E5] p-2.5 text-xs text-ink">⚠️ {toggleError}</p>
+          <p className="mt-3 flex gap-1.5 rounded-[9px] bg-[#FFE5E5] p-2.5 text-xs text-ink">
+            <AlertTriangle className="mt-px h-3.5 w-3.5 flex-shrink-0 text-warn" />
+            <span>{toggleError}</span>
+          </p>
         )}
 
         {!status?.unavailable && status?.mode === "local" && status?.running && primaryIp && (
@@ -334,7 +349,7 @@ export function FtpControlPanel({
                     key={slot.key}
                     title={
                       <EditableTitle
-                        emoji={slot.emoji}
+                        category={slot.key}
                         value={labels[slot.key] ?? slot.label}
                         onChange={(next) => renameCategory(slot.key, next)}
                       />
@@ -354,7 +369,9 @@ export function FtpControlPanel({
 
               <Card menu={false}>
                 <div className="flex items-center gap-3">
-                  <span className="text-2xl">📸</span>
+                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-pale text-purple">
+                    <Camera className="h-5 w-5" />
+                  </span>
                   <div>
                     <div className="text-[20px] font-extrabold text-purple-deep">{receivedCount}</div>
                     <div className="text-xs text-ink-soft">фото прийнято з моменту відкриття цієї сторінки</div>

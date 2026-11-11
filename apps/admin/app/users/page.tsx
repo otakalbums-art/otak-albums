@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Card, Button } from "@otak/ui";
 import { ADMIN_TABS } from "@/lib/admin-tabs";
 import { RoleForm } from "./role-form";
+import { Check, Copy } from "lucide-react";
 
 type Role = { id: string; name: string; tab_keys: string[]; is_owner: boolean };
 type AdminUser = {
@@ -264,14 +265,14 @@ export default function UsersPage() {
                 onClick={copyTempPassword}
                 className="rounded-[6px] border border-line bg-white px-1.5 py-1 text-[10.5px] font-bold text-purple hover:border-purple"
               >
-                {copied ? "✓" : "📋"}
+                {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
               </button>
               <button onClick={() => setLastCreated(null)} className="ml-2 text-[11px] text-ink-soft hover:underline">
                 Приховати
               </button>
             </div>
             <p className="mt-2 text-[11px] text-ink-soft">
-              Попроси нового адміна після першого входу увімкнути «🔔 Сповіщення» в бічному меню —
+              Попроси нового адміна після першого входу увімкнути «Сповіщення» в бічному меню —
               інакше push на нього/неї надсилатись не будуть, доступ до вкладок сам по собі цього
               не вмикає (кожен пристрій підписується окремо).
             </p>

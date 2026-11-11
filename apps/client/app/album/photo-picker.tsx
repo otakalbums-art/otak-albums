@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Button } from "@otak/ui";
+import { Check, Heart } from "lucide-react";
 
 type Photo = { id: string; filename: string; url: string | null };
 
@@ -61,7 +62,7 @@ export function PhotoPicker({
         <div className="min-h-0 flex-1 overflow-y-auto">
           {photos.length === 0 ? (
             <p className="text-sm text-ink-soft">
-              Тут поки порожньо — спершу познач фото зіркою ★ в галереї, щоб вони з'явились тут.
+              Тут поки порожньо — спершу познач фото сердечком <Heart className="inline h-3 w-3 -translate-y-px fill-purple text-purple" /> в галереї, щоб вони з'явились тут.
             </p>
           ) : (
             <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-4">
@@ -80,7 +81,7 @@ export function PhotoPicker({
                   >
                     {isSelected && (
                       <span className="absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-purple text-[11px] font-bold text-white">
-                        ✓
+                        <Check className="h-3 w-3" strokeWidth={3} />
                       </span>
                     )}
                     <span className="absolute inset-x-0 bottom-0 truncate bg-gradient-to-t from-black/60 to-transparent px-1.5 pb-1 pt-3 font-mono text-[9px] text-white">

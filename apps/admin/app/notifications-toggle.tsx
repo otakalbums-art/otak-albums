@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Toggle } from "@otak/ui";
+import { Check } from "lucide-react";
 
 // applicationServerKey потрібен як Uint8Array, а VAPID public key приходить
 // у base64url — стандартне перетворення (немає готового в браузерному API).
@@ -106,7 +107,13 @@ export function NotificationsToggle() {
           disabled={busy}
           className="mx-2.5 rounded-lg border border-line px-2.5 py-1.5 text-left text-[11px] font-semibold text-ink-soft hover:bg-page"
         >
-          {testSent ? "✓ Надіслано" : "Надіслати тестове"}
+          {testSent ? (
+            <span className="inline-flex items-center gap-1">
+              <Check className="h-3 w-3" /> Надіслано
+            </span>
+          ) : (
+            "Надіслати тестове"
+          )}
         </button>
       )}
     </div>

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Card, Button } from "@otak/ui";
 import { PhotoPicker } from "./photo-picker";
 import { redirectToLogin } from "@/lib/session-redirect";
+import { Check, CheckCircle2, Heart } from "lucide-react";
 
 type Photo = { id: string; filename: string; url: string | null };
 type Slot = { id: string; label: string; max_photos: number; sort_order: number };
@@ -128,12 +129,12 @@ export default function AlbumPage() {
         <div>
           <h1 className="text-lg font-bold">Сформувати альбом</h1>
           <p className="text-xs text-ink-soft">
-            Обирай фото зі свого ★ обраного під кожне місце в альбомі. Заповнено {filledCount}/{slots.length}.
+            Обирай фото зі свого обраного <Heart className="inline h-3 w-3 -translate-y-px fill-purple text-purple" /> під кожне місце в альбомі. Заповнено {filledCount}/{slots.length}.
           </p>
         </div>
         {confirmedAt && (
           <span className="inline-flex items-center gap-1.5 rounded-lg bg-[#E7F7EE] px-3 py-1.5 text-[11.5px] font-bold text-ok">
-            ✓ Підтверджено
+            <CheckCircle2 className="h-3.5 w-3.5" /> Підтверджено
           </span>
         )}
       </div>
@@ -144,7 +145,7 @@ export default function AlbumPage() {
           <a href="/gallery" className="font-semibold text-purple hover:underline">
             галерею
           </a>{" "}
-          і познач потрібні фото зіркою ★.
+          і познач потрібні фото сердечком <Heart className="inline h-3 w-3 -translate-y-px fill-purple text-purple" />.
         </p>
       )}
 
@@ -222,7 +223,15 @@ export default function AlbumPage() {
             ))}
             {textError && <p className="mb-3 text-[12.5px] text-warn">{textError}</p>}
             <Button type="submit" disabled={textStatus === "saving"} className="w-auto">
-              {textStatus === "saving" ? "Зберігаємо…" : textStatus === "saved" ? "✓ Збережено" : "Зберегти"}
+              {textStatus === "saving" ? (
+                "Зберігаємо…"
+              ) : textStatus === "saved" ? (
+                <>
+                  <Check className="h-4 w-4" /> Збережено
+                </>
+              ) : (
+                "Зберегти"
+              )}
             </Button>
           </form>
         </Card>

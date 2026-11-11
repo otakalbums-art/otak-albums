@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { PhotoPicker } from "./photo-picker";
+import { Camera, Check, FileText, Gift, X } from "lucide-react";
 
 type Slot = {
   id: string;
@@ -235,7 +236,9 @@ function OrderCell({
           </>
         )}
       </div>
-      {status === "free" && <span className="text-[10.5px] text-ink-soft">🎁 не враховується у фінансах</span>}
+      {status === "free" && <span className="inline-flex items-center gap-1 text-[10.5px] text-ink-soft">
+          <Gift className="h-3 w-3" /> не враховується у фінансах
+        </span>}
       {status !== "free" && remaining != null && remaining > 0 && (
         <span className="text-[10.5px] text-warn">Залишок: {remaining} ₴</span>
       )}
@@ -427,7 +430,10 @@ export function CrmGrid({ classId }: { classId: string }) {
             <th className="whitespace-nowrap pr-5">Замовлення</th>
             {slots.map((slot) => (
               <th key={slot.id} className="whitespace-nowrap px-3">
-                {slot.kind === "photo" ? "📷" : "📝"} {slot.label}
+                <span className="inline-flex items-center gap-1">
+                  {slot.kind === "photo" ? <Camera className="h-3.5 w-3.5" /> : <FileText className="h-3.5 w-3.5" />}
+                  {slot.label}
+                </span>
               </th>
             ))}
             <th className="px-3"></th>
@@ -449,10 +455,10 @@ export function CrmGrid({ classId }: { classId: string }) {
                 <ProgressBar done={progressByStudent.get(student.id) ?? 0} total={slots.length} />
                 {student.selection_confirmed_at && (
                   <span
-                    className="mt-1 inline-block rounded-full bg-[#E7F7EE] px-1.5 py-0.5 text-[9.5px] font-bold text-ok"
+                    className="mt-1 inline-flex items-center gap-0.5 rounded-full bg-[#E7F7EE] px-1.5 py-0.5 text-[9.5px] font-bold text-ok"
                     title={`Учень підтвердив відбір ${new Date(student.selection_confirmed_at).toLocaleString("uk-UA")}`}
                   >
-                    ✓ Підтвердив
+                    <Check className="h-2.5 w-2.5" /> Підтвердив
                   </span>
                 )}
               </td>
@@ -489,7 +495,7 @@ export function CrmGrid({ classId }: { classId: string }) {
                   aria-label="Видалити учня"
                   className="text-[12px] text-ink-soft hover:text-warn"
                 >
-                  ✕
+                  <X className="h-3.5 w-3.5" />
                 </button>
               </td>
             </tr>

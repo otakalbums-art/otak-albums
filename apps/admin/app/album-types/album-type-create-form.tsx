@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@otak/ui";
+import { X } from "lucide-react";
 
 const COUNT_FIELDS: { key: string; label: string }[] = [
   { key: "portraitCount", label: "Портрети" },
@@ -158,7 +159,7 @@ export function AlbumTypeCreateForm() {
                 className="w-[110px] rounded-[9px] border border-line px-2.5 py-1.5 text-xs outline-none focus:border-purple"
               />
               <button onClick={() => removeCustomGroup(i)} aria-label="Прибрати групу" className="text-ink-soft hover:text-warn">
-                ✕
+                <X className="h-3.5 w-3.5" />
               </button>
             </div>
           ))}

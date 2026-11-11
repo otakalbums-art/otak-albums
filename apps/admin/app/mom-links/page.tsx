@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Card, Toggle, Button } from "@otak/ui";
 import { ReferralLinkCell } from "../classes/referral-link-cell";
+import { Bell, Check, Loader2, X } from "lucide-react";
 
 type MomLink = {
   id: string;
@@ -51,7 +52,7 @@ function HoursCell({ id, hours, onSaved }: { id: string; hours: number; onSaved:
           aria-label="Зберегти новий термін дії"
           className="flex-shrink-0 rounded-[6px] border border-line bg-page px-1.5 py-1 text-[10.5px] font-bold text-purple hover:border-purple"
         >
-          {saving ? "…" : "✓"}
+          {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
         </button>
       )}
     </div>
@@ -193,7 +194,7 @@ export default function MomLinksPage() {
                     title="Видалити посилання остаточно"
                     className="rounded-[6px] border border-line bg-page px-1.5 py-1 text-[10.5px] font-bold text-ink-soft hover:border-red-300 hover:text-red-600"
                   >
-                    ✕
+                    <X className="h-3 w-3" />
                   </button>
                 </td>
               </tr>
@@ -203,7 +204,9 @@ export default function MomLinksPage() {
 
         <div className="mt-4 flex flex-wrap items-center justify-between gap-2.5 border-t border-line pt-3.5">
           <div>
-            <div className="text-[12.5px] font-semibold">🔔 Push-нагадування про закінчення</div>
+            <div className="flex items-center gap-1.5 text-[12.5px] font-semibold">
+              <Bell className="h-3.5 w-3.5" /> Push-нагадування про закінчення
+            </div>
             <div className="text-[10.5px] text-ink-soft">
               {pushLastCheckAt
                 ? `Остання перевірка: ${new Date(pushLastCheckAt).toLocaleString("uk-UA")}`

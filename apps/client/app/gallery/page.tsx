@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { PhotoTile } from "@otak/ui";
 import { redirectToLogin } from "@/lib/session-redirect";
+import { Heart, X } from "lucide-react";
 
 type Photo = {
   id: string;
@@ -115,7 +116,9 @@ export default function GalleryPage() {
               filter === "favorites" ? "bg-purple-pale text-purple-deep" : "text-ink-soft"
             }`}
           >
-            ★ Обране
+            <span className="inline-flex items-center gap-1">
+              <Heart className="h-3.5 w-3.5" /> Обране
+            </span>
           </button>
         </div>
         <span
@@ -162,7 +165,7 @@ export default function GalleryPage() {
             className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-xl text-white hover:bg-white/20"
             aria-label="Закрити"
           >
-            ✕
+            <X className="h-5 w-5" />
           </button>
 
           {/* Не <img> навмисно — background-image прибирає найлегшу ціль
@@ -186,9 +189,10 @@ export default function GalleryPage() {
             <span className="font-mono text-xs text-white/80">{openPhoto.filename}</span>
             <button
               onClick={() => toggleFavorite(openPhoto.id)}
-              className={`text-sm font-bold ${openPhoto.is_favorite ? "text-white" : "text-white/60"}`}
+              className={`inline-flex items-center gap-1.5 text-sm font-bold ${openPhoto.is_favorite ? "text-white" : "text-white/60"}`}
             >
-              {openPhoto.is_favorite ? "♥ В обраному" : "♡ В обране"}
+              <Heart className={`h-4 w-4 ${openPhoto.is_favorite ? "fill-white" : ""}`} />
+              {openPhoto.is_favorite ? "В обраному" : "В обране"}
             </button>
           </div>
         </div>

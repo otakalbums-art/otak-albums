@@ -1,6 +1,7 @@
 import { Card, Donut, StatusChip } from "@otak/ui";
 import { createSupabaseServerClient } from "@otak/supabase/server";
 import { ftpStatus } from "@/lib/ftp-process-manager";
+import { Mail, Radio } from "lucide-react";
 
 const PALETTE = ["#460464", "#8C57A8", "#C6A3D6", "#1FAA59", "#E14F4F", "#8A8E98"];
 
@@ -125,10 +126,16 @@ export default async function DashboardPage() {
     <div>
       <div className="mb-4 flex flex-wrap items-center gap-2.5">
         <StatusChip status={ftp.running ? "active" : "off"}>
-          {ftp.running ? "📡 Прийом з камер: увімкнено" : "📡 Прийом з камер: вимкнено"}
+          <span className="inline-flex items-center gap-1">
+            <Radio className="h-3 w-3" />
+            {ftp.running ? "Прийом з камер: увімкнено" : "Прийом з камер: вимкнено"}
+          </span>
         </StatusChip>
         <StatusChip status={momLinksActive ? "active" : "off"}>
-          {momLinksActive ? "💌 Посилання для мам: активні" : "💌 Посилання для мам: вимкнено глобально"}
+          <span className="inline-flex items-center gap-1">
+            <Mail className="h-3 w-3" />
+            {momLinksActive ? "Посилання для мам: активні" : "Посилання для мам: вимкнено глобально"}
+          </span>
         </StatusChip>
       </div>
 

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Card, Button } from "@otak/ui";
 import { redirectToLogin } from "@/lib/session-redirect";
+import { Check } from "lucide-react";
 
 type Slot = { id: string; key: string; label: string };
 
@@ -88,7 +89,15 @@ export default function ProfilePage() {
             ))}
             {error && <p className="mb-3 text-[12.5px] text-warn">{error}</p>}
             <Button type="submit" disabled={status === "saving"}>
-              {status === "saving" ? "Зберігаємо…" : status === "saved" ? "✓ Збережено" : "Зберегти"}
+              {status === "saving" ? (
+                "Зберігаємо…"
+              ) : status === "saved" ? (
+                <>
+                  <Check className="h-4 w-4" /> Збережено
+                </>
+              ) : (
+                "Зберегти"
+              )}
             </Button>
           </form>
         )}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Check, Copy } from "lucide-react";
 
 /** Клікабельне посилання-запрошення учня + кнопка копіювання — щоб одразу скидати в месенджер. */
 export function ReferralLinkCell({ url }: { url: string }) {
@@ -28,7 +29,7 @@ export function ReferralLinkCell({ url }: { url: string }) {
         aria-label="Копіювати посилання"
         className="flex-shrink-0 rounded-[6px] border border-line bg-page px-1.5 py-1 text-[10.5px] font-bold text-purple hover:border-purple"
       >
-        {copied ? "✓" : "📋"}
+        {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
       </button>
     </div>
   );
