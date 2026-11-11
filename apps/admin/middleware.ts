@@ -103,5 +103,6 @@ export const config = {
   // App Router-івську favicon-конвенцію app/icon.png тощо) за розширенням:
   // без цього middleware редіректив їх на /login разом з рештою сторінок,
   // тож лого й фавікон були б биті саме на самій /login (де сесії ще нема).
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|jpeg|gif|svg|webp|ico)$).*)"],
+  // api/cron — виклики Vercel Cron без сесії (роут сам перевіряє CRON_SECRET).
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/cron/|.*\\.(?:png|jpg|jpeg|gif|svg|webp|ico)$).*)"],
 };
