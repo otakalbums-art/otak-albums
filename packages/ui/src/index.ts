@@ -6,3 +6,4 @@ export * from "./components/ProgressRing";
 export * from "./components/Toggle";
 export * from "./components/StatusChip";
 export * from "./tokens";
+export * from "./components/DualScroll";

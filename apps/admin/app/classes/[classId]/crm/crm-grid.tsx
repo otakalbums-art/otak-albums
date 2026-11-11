@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { PhotoPicker } from "./photo-picker";
+import { DualScroll } from "@otak/ui";
 import { Camera, Check, Clock, FileText, Gift, Link2, X } from "lucide-react";
 import { createSupabaseBrowserClient } from "@otak/supabase/browser";
 import { classChannel, type Question } from "@otak/supabase/cabinet";
@@ -509,7 +510,8 @@ export function CrmGrid({ classId }: { classId: string }) {
   const extraCols = (hasSlots ? 1 : 0) + 3 + slots.length + questions.length;
 
   return (
-    <div className="overflow-x-auto">
+    <div>
+      <DualScroll>
       <table className="min-w-max border-collapse text-[13px]">
         <thead>
           <tr className="border-b-[1.5px] border-line text-left text-[11px] font-bold text-ink-soft">
@@ -628,6 +630,7 @@ export function CrmGrid({ classId }: { classId: string }) {
           <AddStudentRow colSpan={extraCols + 1} onAdd={handleAddStudent} />
         </tbody>
       </table>
+      </DualScroll>
 
       {students.length === 0 && <p className="mt-4 text-sm text-ink-soft">У класі ще немає учнів — додай нижче.</p>}
 

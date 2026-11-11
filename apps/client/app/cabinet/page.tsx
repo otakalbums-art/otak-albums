@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Button, Card } from "@otak/ui";
+import { Button, Card, DualScroll } from "@otak/ui";
+import { GroupList } from "./group-list";
 import { createSupabaseBrowserClient } from "@otak/supabase/browser";
 import { classChannel, type Question } from "@otak/supabase/cabinet";
 import { CalendarDays, Check, Clock, Images, Lock, Users } from "lucide-react";
@@ -236,11 +237,22 @@ export default function CabinetPage() {
         title={
           <span className="inline-flex items-center gap-1.5">
             <Users className="h-4 w-4" /> Уся група
+            {data.slots.length > 0 && (
+              <span className="ml-1 rounded-full bg-purple-pale px-2 py-0.5 text-[10.5px] font-semibold text-purple-deep">
+                вільно {data.slots.filter((t) => !data.taken[t]).length} з {data.slots.length}
+              </span>
+            )}
           </span>
         }
         menu={false}
       >
-        <div className="-mx-1 overflow-x-auto px-1">
+        {/* Телефон — розклад картками */}
+        <div className="sm:hidden">
+          <GroupList rows={data.rows} meId={data.meId} questions={data.questions} photoSlots={data.photoSlots} />
+        </div>
+
+        {/* Комп'ютер/планшет — таблиця як у Google Sheets */}
+        <DualScroll className="hidden sm:block">
           <table className="min-w-max border-collapse text-[12.5px]">
             <thead>
               <tr className="border-b-[1.5px] border-line text-left text-[11px] font-bold text-ink-soft">
@@ -289,7 +301,7 @@ export default function CabinetPage() {
               })}
             </tbody>
           </table>
-        </div>
+        </DualScroll>
       </Card>
     </div>
   );
