@@ -29,6 +29,11 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
 
   const service = createSupabaseServiceRoleClient();
   const { error } = await service.from("album_options").delete().eq("id", params.id);
-  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+  if (error) {
+    // FK student_options.option_id on delete restrict (0015).
+    const message =
+      error.code === "23503" ? "Цю послугу вже замовили діти — спершу приберіть її в CRM у цих дітей" : error.message;
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
   return NextResponse.json({ ok: true });
 }

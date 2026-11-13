@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { PhotoPicker } from "./photo-picker";
 import { DualScroll } from "@otak/ui";
-import { Camera, Check, Clock, FileText, Gift, Link2, X } from "lucide-react";
+import { Camera, Check, Clock, FileText, Gift, Link2, Plus, ShoppingBag, X } from "lucide-react";
 import { createSupabaseBrowserClient } from "@otak/supabase/browser";
 import { classChannel, groupForTime, type Question, type TimeGroup } from "@otak/supabase/cabinet";
 
@@ -39,8 +39,16 @@ type Student = {
   deposit_amount: number | null;
   extra_payment_amount: number | null;
   answers: Record<string, string>;
+  options: { optionId: string; name: string; quantity: number }[];
   values: Record<string, PhotoValue | TextValue>;
 };
+
+type CatalogOption = { id: string; category: string | null; name: string; price: number | null };
+
+/** Напівпрозора заливка кольором групи — текст лишається читабельним. */
+function tint(hex: string, alpha = "40") {
+  return `${hex}${alpha}`;
+}
 
 const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
   not_ordered: "Не замовлено",
@@ -290,11 +298,10 @@ function TimeCell({
           setError(err);
           if (err) setDraft(value ?? "");
         }}
-        style={group ? { borderLeft: `4px solid ${group.color}` } : undefined}
-        className="w-[92px] rounded-[7px] border border-line px-1.5 py-1 text-[12px] outline-none focus:border-purple"
+        className="w-[92px] rounded-[7px] border border-line bg-white/80 px-1.5 py-1 text-[12px] outline-none focus:border-purple"
       />
       {group && (
-        <span className="max-w-[92px] truncate text-[9.5px] font-bold" style={{ color: group.color }}>
+        <span className="max-w-[92px] truncate text-[9.5px] font-bold text-ink">
           {group.name}
         </span>
       )}
@@ -319,6 +326,109 @@ function PersonalLinkButton({ token }: { token: string }) {
       {copied ? <Check className="h-3 w-3" /> : <Link2 className="h-3 w-3" />}
       {copied ? "Скопійовано" : "Посилання"}
     </button>
+  );
+}
+
+/** Додаткові послуги дитини: чипи «Назва ×N» + додавання з каталогу. */
+function OptionsCell({
+  value,
+  catalog,
+  onSet,
+}: {
+  value: { optionId: string; name: string; quantity: number }[];
+  catalog: CatalogOption[];
+  onSet: (optionId: string, quantity: number) => Promise<void>;
+}) {
+  const [adding, setAdding] = useState(false);
+  const [optionId, setOptionId] = useState("");
+  const [qty, setQty] = useState("1");
+  const [busy, setBusy] = useState(false);
+
+  async function set(id: string, quantity: number) {
+    setBusy(true);
+    await onSet(id, quantity);
+    setBusy(false);
+  }
+
+  return (
+    <div className="flex min-w-[150px] max-w-[260px] flex-wrap items-center gap-1">
+      {value.map((o) => (
+        <span
+          key={o.optionId}
+          className="inline-flex items-center gap-1 rounded-full bg-[#FFF4D6] py-0.5 pl-2 pr-1 text-[11px] font-semibold text-[#8A6D00]"
+        >
+          {o.name}
+          <select
+            value={o.quantity}
+            disabled={busy}
+            onChange={(e) => set(o.optionId, Number(e.target.value))}
+            className="rounded bg-transparent text-[11px] font-bold outline-none"
+            title="Кількість"
+          >
+            {Array.from({ length: Math.max(10, o.quantity) }, (_, i) => i + 1).map((n) => (
+              <option key={n} value={n}>
+                ×{n}
+              </option>
+            ))}
+          </select>
+          <button onClick={() => set(o.optionId, 0)} disabled={busy} aria-label="Прибрати послугу" className="hover:text-warn">
+            <X className="h-3 w-3" />
+          </button>
+        </span>
+      ))}
+      {adding ? (
+        <span className="flex flex-wrap items-center gap-1">
+          <select
+            value={optionId}
+            onChange={(e) => setOptionId(e.target.value)}
+            className="max-w-[170px] rounded-[7px] border border-line px-1 py-1 text-[11px] outline-none focus:border-purple"
+          >
+            <option value="">Послуга…</option>
+            {catalog
+              .filter((c) => !value.some((v) => v.optionId === c.id))
+              .map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.category ? `${c.category} · ` : ""}
+                  {c.name}
+                  {c.price != null ? ` — ${c.price} ₴` : ""}
+                </option>
+              ))}
+          </select>
+          <input
+            type="number"
+            min={1}
+            max={100}
+            value={qty}
+            onChange={(e) => setQty(e.target.value)}
+            className="w-[44px] rounded-[7px] border border-line px-1 py-1 text-[11px] outline-none focus:border-purple"
+          />
+          <button
+            disabled={!optionId || busy || !(Number(qty) >= 1)}
+            onClick={async () => {
+              await set(optionId, Number(qty));
+              setAdding(false);
+              setOptionId("");
+              setQty("1");
+            }}
+            className="rounded-[7px] bg-purple px-2 py-1 text-[11px] font-bold text-white disabled:opacity-50"
+          >
+            OK
+          </button>
+          <button onClick={() => setAdding(false)} aria-label="Скасувати" className="text-ink-soft hover:text-warn">
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </span>
+      ) : catalog.length ? (
+        <button
+          onClick={() => setAdding(true)}
+          className="inline-flex items-center gap-0.5 rounded-full border border-dashed border-line px-1.5 py-0.5 text-[10.5px] font-semibold text-ink-soft hover:border-purple hover:text-purple"
+        >
+          <Plus className="h-3 w-3" /> послуга
+        </button>
+      ) : (
+        <span className="text-[10.5px] text-ink-soft">Каталог порожній</span>
+      )}
+    </div>
   );
 }
 
@@ -408,6 +518,7 @@ export function CrmGrid({ classId }: { classId: string }) {
   const [students, setStudents] = useState<Student[] | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [timeGroups, setTimeGroups] = useState<TimeGroup[]>([]);
+  const [optionCatalog, setOptionCatalog] = useState<CatalogOption[]>([]);
   const [pickerFor, setPickerFor] = useState<{ studentId: string; slot: Slot } | null>(null);
 
   function refetch() {
@@ -418,6 +529,7 @@ export function CrmGrid({ classId }: { classId: string }) {
         setStudents(data.students ?? []);
         setQuestions(data.questions ?? []);
         setTimeGroups(data.timeGroups ?? []);
+        setOptionCatalog(data.optionCatalog ?? []);
       });
   }
 
@@ -479,6 +591,11 @@ export function CrmGrid({ classId }: { classId: string }) {
     return null;
   }
 
+  async function setStudentOption(studentId: string, optionId: string, quantity: number) {
+    await fetch(`/api/students/${studentId}/options`, { method: "PUT", body: JSON.stringify({ optionId, quantity }) });
+    await refetch();
+  }
+
   async function savePhotos(studentId: string, slot: Slot, photoIds: string[]) {
     await fetch(`/api/students/${studentId}/slots/${slot.id}/photos`, {
       method: "PUT",
@@ -523,7 +640,7 @@ export function CrmGrid({ classId }: { classId: string }) {
 
   const hasSlots = slots.length > 0;
   // Колонки після імені: прогрес (лише зі слотами), замовлення, завдаток, доплата, слоти, анкета.
-  const extraCols = (hasSlots ? 1 : 0) + 3 + slots.length + questions.length;
+  const extraCols = (hasSlots ? 1 : 0) + 4 + slots.length + questions.length;
 
   return (
     <div>
@@ -542,6 +659,11 @@ export function CrmGrid({ classId }: { classId: string }) {
             <th className="whitespace-nowrap pr-5">Замовлення</th>
             <th className="whitespace-nowrap pr-3">Завдаток</th>
             <th className="whitespace-nowrap pr-5">Доплата</th>
+            <th className="whitespace-nowrap pr-5">
+              <span className="inline-flex items-center gap-1">
+                <ShoppingBag className="h-3.5 w-3.5" /> Додатково
+              </span>
+            </th>
             {slots.map((slot) => (
               <th key={slot.id} className="whitespace-nowrap px-3">
                 <span className="inline-flex items-center gap-1">
@@ -562,7 +684,13 @@ export function CrmGrid({ classId }: { classId: string }) {
           {students.map((student, i) => (
             <tr key={student.id} className="border-b border-line align-middle">
               <td className="py-3 pr-3 text-ink-soft">{i + 1}</td>
-              <td className="pr-3">
+              <td
+                className="px-2 py-1.5"
+                style={(() => {
+                  const g = groupForTime(timeGroups, student.shoot_time);
+                  return g ? { background: tint(g.color) } : undefined;
+                })()}
+              >
                 <TimeCell
                   value={student.shoot_time}
                   group={groupForTime(timeGroups, student.shoot_time)}
@@ -605,6 +733,13 @@ export function CrmGrid({ classId }: { classId: string }) {
                 <MoneyCell
                   value={student.extra_payment_amount}
                   onSave={(v) => patchStudent(student.id, { extraPaymentAmount: v })}
+                />
+              </td>
+              <td className="pr-5">
+                <OptionsCell
+                  value={student.options}
+                  catalog={optionCatalog}
+                  onSet={(optionId, quantity) => setStudentOption(student.id, optionId, quantity)}
                 />
               </td>
               {slots.map((slot) => {

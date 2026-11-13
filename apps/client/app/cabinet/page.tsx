@@ -5,7 +5,7 @@ import { Button, Card, DualScroll } from "@otak/ui";
 import { GroupList } from "./group-list";
 import { createSupabaseBrowserClient } from "@otak/supabase/browser";
 import { classChannel, groupForTime, groupSlots, type Question, type TimeGroup } from "@otak/supabase/cabinet";
-import { CalendarDays, CalendarX, Check, Clock, Images, Loader2, Lock, Users } from "lucide-react";
+import { CalendarDays, CalendarX, Check, Clock, Images, Loader2, Lock, ShoppingBag, Users } from "lucide-react";
 import { redirectToLogin } from "@/lib/session-redirect";
 
 type Row = {
@@ -15,6 +15,7 @@ type Row = {
   shootTime: string | null;
   answers: Record<string, string>;
   photos: Record<string, string[]>;
+  extras: { name: string; quantity: number }[];
 };
 
 type CabinetData = {
@@ -28,6 +29,20 @@ type CabinetData = {
   hasPhotos: boolean;
   rows: Row[];
 };
+
+/** Додаткові послуги дитини — чипи «Назва ×N» (без цін). */
+function ExtrasChips({ extras }: { extras: { name: string; quantity: number }[] }) {
+  return (
+    <span className="flex flex-wrap gap-1">
+      {extras.map((e) => (
+        <span key={e.name} className="whitespace-nowrap rounded-full bg-[#FFF4D6] px-2 py-0.5 text-[11px] font-semibold text-[#8A6D00]">
+          {e.name}
+          {e.quantity > 1 ? ` ×${e.quantity}` : ""}
+        </span>
+      ))}
+    </span>
+  );
+}
 
 function formatDate(iso: string) {
   return new Date(`${iso}T00:00:00`).toLocaleDateString("uk-UA", { day: "numeric", month: "long", year: "numeric" });
@@ -180,13 +195,19 @@ export default function CabinetPage() {
                                 key={t}
                                 disabled={!canEdit || busy || mine || timeBusy !== null}
                                 onClick={() => pickTime(t)}
-                                style={mine ? { background: g.color, borderColor: g.color } : busy ? undefined : { borderColor: `${g.color}66` }}
+                                style={
+                                  mine
+                                    ? { background: g.color, borderColor: g.color }
+                                    : busy
+                                      ? undefined
+                                      : { background: `${g.color}26`, borderColor: `${g.color}80` }
+                                }
                                 className={`rounded-[8px] border-[1.5px] px-1 py-2 text-[12.5px] font-semibold transition-colors ${
                                   mine
                                     ? "text-white"
                                     : busy
                                       ? "cursor-not-allowed border-line bg-page text-ink-soft/50 line-through"
-                                      : "bg-card text-ink hover:brightness-95 disabled:opacity-60"
+                                      : "text-ink hover:brightness-95 disabled:opacity-60"
                                 }`}
                               >
                                 {timeBusy === t ? "…" : t}
@@ -246,6 +267,15 @@ export default function CabinetPage() {
             </form>
           )}
 
+          {me.extras.length > 0 && (
+            <div className="mt-4 border-t border-line pt-3.5">
+              <div className="mb-1.5 flex items-center gap-1.5 text-[12.5px] font-semibold">
+                <ShoppingBag className="h-4 w-4 text-purple" /> Додатково замовлено
+              </div>
+              <ExtrasChips extras={me.extras} />
+            </div>
+          )}
+
           {data.photoSlots.length > 0 && (
             <div className="mt-4 border-t border-line pt-3.5">
               {data.hasPhotos ? (
@@ -294,6 +324,7 @@ export default function CabinetPage() {
               <tr className="border-b-[1.5px] border-line text-left text-[11px] font-bold text-ink-soft">
                 <th className="py-2 pr-3">Час</th>
                 <th className="sticky left-0 z-10 bg-card py-2 pr-4">Прізвище та ім'я</th>
+                <th className="whitespace-nowrap px-3 py-2">Додатково</th>
                 {data.photoSlots.map((s) => (
                   <th key={s.id} className="whitespace-nowrap px-3 py-2">
                     {s.label}
@@ -312,17 +343,15 @@ export default function CabinetPage() {
                 const bg = mine ? "bg-purple-pale" : "bg-card";
                 return (
                   <tr key={r.id} className={`border-b border-line align-top ${mine ? "bg-purple-pale" : ""}`}>
-                    <td className="whitespace-nowrap py-2.5 pr-3 font-semibold">
-                      <span className="inline-flex items-center gap-1.5">
-                        {groupForTime(data.timeGroups, r.shootTime) && (
-                          <span
-                            className="h-2.5 w-2.5 rounded-full"
-                            title={groupForTime(data.timeGroups, r.shootTime)!.name}
-                            style={{ background: groupForTime(data.timeGroups, r.shootTime)!.color }}
-                          />
-                        )}
-                        {r.shootTime ?? "—"}
-                      </span>
+                    <td
+                      className="whitespace-nowrap px-2.5 py-2.5 font-semibold"
+                      title={groupForTime(data.timeGroups, r.shootTime)?.name}
+                      style={(() => {
+                        const g = groupForTime(data.timeGroups, r.shootTime);
+                        return g ? { background: `${g.color}40` } : undefined;
+                      })()}
+                    >
+                      {r.shootTime ?? "—"}
                     </td>
                     <td className={`sticky left-0 z-10 whitespace-nowrap py-2.5 pr-4 font-semibold ${bg}`}>
                       {r.name}
@@ -332,6 +361,9 @@ export default function CabinetPage() {
                         </span>
                       )}
                       {mine && <span className="ml-1.5 text-[10px] font-bold text-purple">ви</span>}
+                    </td>
+                    <td className="max-w-[240px] px-3 py-2.5">
+                      {r.extras.length ? <ExtrasChips extras={r.extras} /> : <span className="text-ink-soft">—</span>}
                     </td>
                     {data.photoSlots.map((s) => (
                       <td key={s.id} className="max-w-[160px] px-3 py-2.5 font-mono text-[11px] text-ink-soft">

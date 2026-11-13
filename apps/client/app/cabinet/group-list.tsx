@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, Search } from "lucide-react";
+import { ChevronDown, Search, ShoppingBag } from "lucide-react";
 import { groupForTime, type Question, type TimeGroup } from "@otak/supabase/cabinet";
 
 export type GroupRow = {
@@ -11,6 +11,7 @@ export type GroupRow = {
   shootTime: string | null;
   answers: Record<string, string>;
   photos: Record<string, string[]>;
+  extras: { name: string; quantity: number }[];
 };
 
 function initials(name: string) {
@@ -95,6 +96,17 @@ export function GroupList({
                     ? "Анкету ще не заповнено"
                     : ""}
             </span>
+            {r.extras.length > 0 && (
+              <span className="mt-1 flex flex-wrap items-center gap-1">
+                <ShoppingBag className="h-3 w-3 text-[#8A6D00]" />
+                {r.extras.map((e) => (
+                  <span key={e.name} className="rounded-full bg-[#FFF4D6] px-1.5 py-px text-[10.5px] font-semibold text-[#8A6D00]">
+                    {e.name}
+                    {e.quantity > 1 ? ` ×${e.quantity}` : ""}
+                  </span>
+                ))}
+              </span>
+            )}
           </span>
           {questions.length > 0 && !r.staffRole && (
             <span className="flex flex-shrink-0 items-center gap-1 text-[10.5px] font-semibold text-ink-soft">

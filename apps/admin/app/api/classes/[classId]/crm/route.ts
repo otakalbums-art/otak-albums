@@ -50,7 +50,8 @@ export async function GET(_req: Request, { params }: { params: { classId: string
   const studentIds = (students ?? []).map((s: any) => s.id);
   const slotIds = (slots ?? []).map((s: any) => s.id);
 
-  const [{ data: slotPhotos }, { data: slotAnswers }, { data: answers }] = await Promise.all([
+  const [{ data: slotPhotos }, { data: slotAnswers }, { data: answers }, { data: studentOptions }, { data: optionCatalog }] =
+    await Promise.all([
     studentIds.length && slotIds.length
       ? service
           .from("student_slot_photos")
@@ -69,7 +70,22 @@ export async function GET(_req: Request, { params }: { params: { classId: string
     studentIds.length
       ? service.from("student_answers").select("student_id, question_key, answer").in("student_id", studentIds)
       : Promise.resolve({ data: [] as any[] }),
+    studentIds.length
+      ? service
+          .from("student_options")
+          .select("student_id, option_id, quantity, album_options(name)")
+          .in("student_id", studentIds)
+          .order("created_at")
+      : Promise.resolve({ data: [] as any[] }),
+    service.from("album_options").select("id, category, name, price").order("sort_order").order("created_at"),
   ]);
+
+  const optionsByStudent = new Map<string, { optionId: string; name: string; quantity: number }[]>();
+  for (const o of studentOptions ?? []) {
+    const list = optionsByStudent.get(o.student_id) ?? [];
+    list.push({ optionId: o.option_id, name: (o as any).album_options?.name ?? "", quantity: o.quantity });
+    optionsByStudent.set(o.student_id, list);
+  }
 
   const answersByStudent = new Map<string, Record<string, string>>();
   for (const a of answers ?? []) {
@@ -124,8 +140,9 @@ export async function GET(_req: Request, { params }: { params: { classId: string
     deposit_amount: s.deposit_amount,
     extra_payment_amount: s.extra_payment_amount,
     answers: answersByStudent.get(s.id) ?? {},
+    options: optionsByStudent.get(s.id) ?? [],
     values: valuesByStudent.get(s.id) ?? {},
   }));
 
-  return NextResponse.json({ slots: slots ?? [], students: mappedStudents, questions, timeGroups: parseTimeGroups(klass.time_groups), hasAlbumType: !!klass.album_type_id });
+  return NextResponse.json({ slots: slots ?? [], students: mappedStudents, questions, timeGroups: parseTimeGroups(klass.time_groups), optionCatalog: optionCatalog ?? [], hasAlbumType: !!klass.album_type_id });
 }

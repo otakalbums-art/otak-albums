@@ -172,6 +172,27 @@ export type Database = {
           { foreignKeyName: "classes_album_type_id_fkey"; columns: ["album_type_id"]; isOneToOne: false; referencedRelation: "album_types"; referencedColumns: ["id"] }
         ];
       };
+      student_options: {
+        Row: { id: string; student_id: string; option_id: string; quantity: number; unit_price: number | null; created_at: string };
+        Insert: { id?: string; student_id: string; option_id: string; quantity?: number; unit_price?: number | null; created_at?: string };
+        Update: { id?: string; student_id?: string; option_id?: string; quantity?: number; unit_price?: number | null; created_at?: string };
+        Relationships: [
+          {
+            foreignKeyName: "student_options_student_id_fkey";
+            columns: ["student_id"];
+            isOneToOne: false;
+            referencedRelation: "students";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "student_options_option_id_fkey";
+            columns: ["option_id"];
+            isOneToOne: false;
+            referencedRelation: "album_options";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       student_answers: {
         Row: { student_id: string; question_key: string; answer: string; updated_at: string };
         Insert: { student_id: string; question_key: string; answer?: string; updated_at?: string };

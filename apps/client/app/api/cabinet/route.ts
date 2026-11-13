@@ -62,7 +62,7 @@ export async function GET() {
   const ids = (students ?? []).map((s) => s.id);
   const slotIds = (photoSlots ?? []).map((s) => s.id);
 
-  const [{ data: answers }, { data: picks }] = await Promise.all([
+  const [{ data: answers }, { data: picks }, { data: ordered }] = await Promise.all([
     ids.length
       ? supabase.from("student_answers").select("student_id, question_key, answer").in("student_id", ids)
       : Promise.resolve({ data: [] as any[] }),
@@ -74,7 +74,22 @@ export async function GET() {
           .in("slot_id", slotIds)
           .order("sort_order")
       : Promise.resolve({ data: [] as any[] }),
+    ids.length
+      ? supabase
+          .from("student_options")
+          .select("student_id, quantity, album_options(name)")
+          .in("student_id", ids)
+          .order("created_at")
+      : Promise.resolve({ data: [] as any[] }),
   ]);
+
+  // Додаткові послуги дітей — лише назва й кількість, без цін.
+  const extrasBy = new Map<string, { name: string; quantity: number }[]>();
+  for (const o of ordered ?? []) {
+    const list = extrasBy.get(o.student_id) ?? [];
+    list.push({ name: (o as any).album_options?.name ?? "", quantity: o.quantity });
+    extrasBy.set(o.student_id, list);
+  }
 
   const answersBy = new Map<string, Record<string, string>>();
   for (const a of answers ?? []) {
@@ -96,6 +111,7 @@ export async function GET() {
     shootTime: hhmm(s.shoot_time),
     answers: answersBy.get(s.id) ?? {},
     photos: picksBy.get(s.id) ?? {},
+    extras: extrasBy.get(s.id) ?? [],
   }));
 
   const taken = Object.fromEntries(rows.filter((r) => r.shootTime).map((r) => [r.shootTime!, r.id]));
