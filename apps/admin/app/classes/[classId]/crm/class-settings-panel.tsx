@@ -3,16 +3,21 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Toggle } from "@otak/ui";
-import { KINDERGARTEN_QUESTIONS, generateSlots, type Question } from "@otak/supabase/cabinet";
+import {
+  GROUP_COLORS,
+  KINDERGARTEN_QUESTIONS,
+  defaultGroupName,
+  groupSlots,
+  type Question,
+  type TimeGroup,
+} from "@otak/supabase/cabinet";
 import { BookImage, CalendarDays, ListChecks, Lock, Plus, X } from "lucide-react";
 
 export type ClassSettings = {
   id: string;
   album_type_id: string | null;
   shoot_date: string | null;
-  slot_start: string | null;
-  slot_end: string | null;
-  slot_interval_min: number;
+  time_groups: TimeGroup[];
   parent_editing_enabled: boolean;
   questions: Question[];
 };
@@ -34,9 +39,7 @@ type AlbumTypeOption = { id: string; name: string; category: string | null };
 export function ClassSettingsPanel({ settings, albumTypes }: { settings: ClassSettings; albumTypes: AlbumTypeOption[] }) {
   const router = useRouter();
   const [date, setDate] = useState(settings.shoot_date ?? "");
-  const [start, setStart] = useState(settings.slot_start?.slice(0, 5) ?? "");
-  const [end, setEnd] = useState(settings.slot_end?.slice(0, 5) ?? "");
-  const [interval, setIntervalMin] = useState(String(settings.slot_interval_min));
+  const [groups, setGroups] = useState<TimeGroup[]>(settings.time_groups);
   const [editing, setEditing] = useState(settings.parent_editing_enabled);
   const [questions, setQuestions] = useState<Question[]>(settings.questions);
   const [busy, setBusy] = useState<string | null>(null);
@@ -46,21 +49,34 @@ export function ClassSettingsPanel({ settings, albumTypes }: { settings: ClassSe
   const settingsKey = JSON.stringify(settings);
   useEffect(() => {
     setDate(settings.shoot_date ?? "");
-    setStart(settings.slot_start?.slice(0, 5) ?? "");
-    setEnd(settings.slot_end?.slice(0, 5) ?? "");
-    setIntervalMin(String(settings.slot_interval_min));
+    setGroups(settings.time_groups);
     setEditing(settings.parent_editing_enabled);
     setQuestions(settings.questions);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settingsKey]);
 
   const scheduleDirty =
-    date !== (settings.shoot_date ?? "") ||
-    start !== (settings.slot_start?.slice(0, 5) ?? "") ||
-    end !== (settings.slot_end?.slice(0, 5) ?? "") ||
-    interval !== String(settings.slot_interval_min);
+    date !== (settings.shoot_date ?? "") || JSON.stringify(groups) !== JSON.stringify(settings.time_groups);
   const questionsDirty = JSON.stringify(questions) !== JSON.stringify(settings.questions);
-  const preview = generateSlots(start || null, end || null, Number(interval));
+
+  function updateGroup(i: number, patch: Partial<TimeGroup>) {
+    setGroups((prev) => prev.map((g, idx) => (idx === i ? { ...g, ...patch } : g)));
+  }
+
+  /** Нова група починається там, де закінчилась попередня, з тим самим кроком. */
+  function addGroup() {
+    setGroups((prev) => {
+      const last = prev[prev.length - 1];
+      const start = last?.end ?? "16:00";
+      const [h, m] = start.split(":").map(Number);
+      const endMin = Math.min(h * 60 + m + 20, 23 * 60 + 59);
+      const end = `${String(Math.floor(endMin / 60)).padStart(2, "0")}:${String(endMin % 60).padStart(2, "0")}`;
+      return [
+        ...prev,
+        { id: "", name: "", color: GROUP_COLORS[prev.length % GROUP_COLORS.length], start, end, interval: last?.interval ?? 5 },
+      ];
+    });
+  }
 
   async function run(key: string, body: Record<string, unknown>, okText: string) {
     setBusy(key);
@@ -79,8 +95,8 @@ export function ClassSettingsPanel({ settings, albumTypes }: { settings: ClassSe
   }
 
   return (
-    <div className="mb-5 grid gap-3.5 lg:grid-cols-3">
-      <label className="flex flex-wrap items-center gap-2 text-xs font-semibold lg:col-span-3">
+    <div className="mb-5 grid gap-3.5 lg:grid-cols-2">
+      <label className="flex flex-wrap items-center gap-2 text-xs font-semibold lg:col-span-2">
         <BookImage className="h-4 w-4 text-purple" /> Тип альбому
         <select
           value={settings.album_type_id ?? ""}
@@ -96,40 +112,89 @@ export function ClassSettingsPanel({ settings, albumTypes }: { settings: ClassSe
           ))}
         </select>
       </label>
-      {/* Дата і слоти */}
-      <section className="rounded-xl border border-line p-3.5">
+      {/* Дата і часові групи */}
+      <section className="rounded-xl border border-line p-3.5 lg:col-span-2">
         <h4 className="mb-2.5 flex items-center gap-1.5 text-[13px] font-bold">
-          <CalendarDays className="h-4 w-4 text-purple" /> Зйомка і час
+          <CalendarDays className="h-4 w-4 text-purple" /> Зйомка і часові групи
         </h4>
-        <div className="grid grid-cols-2 gap-2">
-          <label className="col-span-2 text-[10.5px] text-ink-soft">
-            Дата зйомки
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={`${input} mt-0.5 w-full`} />
-          </label>
-          <label className="text-[10.5px] text-ink-soft">
-            Перший слот
-            <input type="time" value={start} onChange={(e) => setStart(e.target.value)} className={`${input} mt-0.5 w-full`} />
-          </label>
-          <label className="text-[10.5px] text-ink-soft">
-            Останній слот
-            <input type="time" value={end} onChange={(e) => setEnd(e.target.value)} className={`${input} mt-0.5 w-full`} />
-          </label>
-          <label className="col-span-2 text-[10.5px] text-ink-soft">
-            Хвилин між дітьми
-            <input
-              type="number"
-              min={1}
-              max={240}
-              value={interval}
-              onChange={(e) => setIntervalMin(e.target.value)}
-              className={`${input} mt-0.5 w-full`}
-            />
-          </label>
+        <label className="block max-w-[220px] text-[10.5px] text-ink-soft">
+          Дата зйомки
+          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={`${input} mt-0.5 w-full`} />
+        </label>
+
+        <div className="mt-3 flex flex-col gap-2">
+          {groups.map((g, i) => {
+            const count = groupSlots(g).length;
+            return (
+              <div
+                key={i}
+                className="flex flex-wrap items-end gap-2 rounded-[10px] border border-line border-l-4 p-2.5"
+                style={{ borderLeftColor: g.color }}
+              >
+                <label className="text-[10.5px] text-ink-soft">
+                  Колір
+                  <input
+                    type="color"
+                    value={g.color}
+                    onChange={(e) => updateGroup(i, { color: e.target.value })}
+                    className="mt-0.5 block h-[30px] w-[42px] cursor-pointer rounded-[8px] border border-line bg-white p-0.5"
+                  />
+                </label>
+                <label className="min-w-[130px] flex-1 text-[10.5px] text-ink-soft">
+                  Назва
+                  <input
+                    value={g.name}
+                    onChange={(e) => updateGroup(i, { name: e.target.value })}
+                    placeholder={defaultGroupName(i)}
+                    className={`${input} mt-0.5 w-full`}
+                  />
+                </label>
+                <label className="text-[10.5px] text-ink-soft">
+                  Від
+                  <input type="time" value={g.start} onChange={(e) => updateGroup(i, { start: e.target.value })} className={`${input} mt-0.5 block`} />
+                </label>
+                <label className="text-[10.5px] text-ink-soft">
+                  До
+                  <input type="time" value={g.end} onChange={(e) => updateGroup(i, { end: e.target.value })} className={`${input} mt-0.5 block`} />
+                </label>
+                <label className="text-[10.5px] text-ink-soft">
+                  Хв на дитину
+                  <input
+                    type="number"
+                    min={1}
+                    max={240}
+                    value={g.interval}
+                    onChange={(e) => updateGroup(i, { interval: Number(e.target.value) })}
+                    className={`${input} mt-0.5 block w-[86px]`}
+                  />
+                </label>
+                <span className="pb-1.5 text-[11.5px] font-bold" style={{ color: g.color }}>
+                  {count} {count === 1 ? "дитина" : count >= 2 && count <= 4 ? "дитини" : "дітей"}
+                </span>
+                <button
+                  onClick={() => setGroups((prev) => prev.filter((_, idx) => idx !== i))}
+                  aria-label="Прибрати групу"
+                  className="ml-auto pb-1.5 text-ink-soft hover:text-warn"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            );
+          })}
+          {groups.length === 0 && (
+            <p className="text-[11px] text-ink-soft">
+              Додайте часову групу — батьки зможуть обрати час у межах її проміжку.
+            </p>
+          )}
+          <div>
+            <Button size="sm" variant="ghost" onClick={addGroup}>
+              <Plus className="h-3.5 w-3.5" /> Часова група
+            </Button>
+          </div>
         </div>
         <p className="mt-2 text-[10.5px] text-ink-soft">
-          {preview.length > 0
-            ? `${preview.length} слотів: ${preview.slice(0, 4).join(", ")}${preview.length > 4 ? ` … ${preview[preview.length - 1]}` : ""}`
-            : "Задайте перший і останній слот — батьки зможуть обрати час."}
+          Слоти — від «Від» до «До» (не включно) з кроком «Хв на дитину». Напр. 16:00–16:20 по 5 хв = 4 дитини.
+          Без назви група стане «Група 1», «Група 2»…
         </p>
         {scheduleDirty && (
           <Button
@@ -139,7 +204,7 @@ export function ClassSettingsPanel({ settings, albumTypes }: { settings: ClassSe
             onClick={() =>
               run(
                 "schedule",
-                { shootDate: date || null, slotStart: start || null, slotEnd: end || null, slotIntervalMin: Number(interval) },
+                { shootDate: date || null, timeGroups: groups },
                 "Розклад збережено"
               )
             }
@@ -216,7 +281,7 @@ export function ClassSettingsPanel({ settings, albumTypes }: { settings: ClassSe
       </section>
 
       {message && (
-        <p className={`text-xs font-semibold lg:col-span-3 ${message.ok ? "text-ok" : "text-warn"}`}>{message.text}</p>
+        <p className={`text-xs font-semibold lg:col-span-2 ${message.ok ? "text-ok" : "text-warn"}`}>{message.text}</p>
       )}
     </div>
   );

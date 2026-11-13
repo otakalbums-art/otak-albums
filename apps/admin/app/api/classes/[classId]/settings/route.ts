@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServiceRoleClient } from "@otak/supabase/server";
-import { broadcastClassChange, parseQuestions } from "@otak/supabase/cabinet";
+import { randomUUID } from "crypto";
+import { broadcastClassChange, groupSlots, parseQuestions, parseTimeGroups } from "@otak/supabase/cabinet";
 import { requireAdmin } from "@/lib/require-admin";
 import { slotKeySlug } from "@/lib/slugify";
 
@@ -9,7 +10,7 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
  * PATCH /api/classes/[classId]/settings — налаштування кабінету батьків.
- * Body (усі поля необов'язкові): { shootDate, slotStart, slotEnd, slotIntervalMin,
+ * Body (усі поля необов'язкові): { shootDate, timeGroups: [{id?, name, color, start, end, interval}],
  *   parentEditingEnabled, questions: [{key?, label}], albumTypeId }
  */
 export async function PATCH(req: Request, { params }: { params: { classId: string } }) {
@@ -23,20 +24,33 @@ export async function PATCH(req: Request, { params }: { params: { classId: strin
     if (body.shootDate && !DATE_RE.test(body.shootDate)) return NextResponse.json({ error: "Невірна дата" }, { status: 400 });
     update.shoot_date = body.shootDate || null;
   }
-  for (const [field, column] of [
-    ["slotStart", "slot_start"],
-    ["slotEnd", "slot_end"],
-  ] as const) {
-    if (body[field] === undefined) continue;
-    if (body[field] && !TIME_RE.test(body[field])) return NextResponse.json({ error: "Невірний час" }, { status: 400 });
-    update[column] = body[field] || null;
-  }
-  if (body.slotIntervalMin !== undefined) {
-    const n = Number(body.slotIntervalMin);
-    if (!Number.isInteger(n) || n < 1 || n > 240) {
-      return NextResponse.json({ error: "Проміжок — від 1 до 240 хвилин" }, { status: 400 });
+  if (body.timeGroups !== undefined) {
+    const raw: any[] = Array.isArray(body.timeGroups) ? body.timeGroups : [];
+    for (const [i, g] of raw.entries()) {
+      const n = i + 1;
+      if (!TIME_RE.test(g?.start ?? "") || !TIME_RE.test(g?.end ?? "")) {
+        return NextResponse.json({ error: `Група ${n}: вкажіть початок і кінець` }, { status: 400 });
+      }
+      if (g.start >= g.end) return NextResponse.json({ error: `Група ${n}: початок має бути раніше за кінець` }, { status: 400 });
+      const interval = Number(g.interval);
+      if (!Number.isInteger(interval) || interval < 1 || interval > 240) {
+        return NextResponse.json({ error: `Група ${n}: хвилин на дитину — від 1 до 240` }, { status: 400 });
+      }
     }
-    update.slot_interval_min = n;
+    const groups = parseTimeGroups(raw.map((g) => ({ ...g, id: g.id || randomUUID().slice(0, 8) })));
+    const sorted = [...groups].sort((a, b) => a.start.localeCompare(b.start));
+    for (let i = 1; i < sorted.length; i++) {
+      if (sorted[i].start < sorted[i - 1].end) {
+        return NextResponse.json(
+          { error: `Групи «${sorted[i - 1].name}» і «${sorted[i].name}» перетинаються в часі` },
+          { status: 400 }
+        );
+      }
+    }
+    if (groups.some((g) => groupSlots(g).length === 0)) {
+      return NextResponse.json({ error: "У кожній групі має бути хоча б один слот" }, { status: 400 });
+    }
+    update.time_groups = groups;
   }
   if (body.albumTypeId !== undefined) update.album_type_id = body.albumTypeId || null;
   if (body.parentEditingEnabled !== undefined) update.parent_editing_enabled = !!body.parentEditingEnabled;
@@ -52,10 +66,6 @@ export async function PATCH(req: Request, { params }: { params: { classId: strin
       return { key, label: q.label };
     });
     update.questions = questions;
-  }
-
-  if (update.slot_start && update.slot_end && String(update.slot_start) > String(update.slot_end)) {
-    return NextResponse.json({ error: "Початок має бути раніше за кінець" }, { status: 400 });
   }
 
   const service = createSupabaseServiceRoleClient();

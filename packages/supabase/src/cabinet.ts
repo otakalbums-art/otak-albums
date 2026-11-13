@@ -58,14 +58,66 @@ function toMinutes(t: string) {
   return h * 60 + m;
 }
 
-/** Слоти від start до end (включно, якщо влазить) з кроком interval хвилин. */
-export function generateSlots(start: string | null, end: string | null, intervalMin: number): string[] {
-  if (!start || !end || !intervalMin || intervalMin < 1) return [];
-  const from = toMinutes(start);
-  const to = toMinutes(end);
+function toHHMM(t: number) {
+  return `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`;
+}
+
+// --- Часові групи (supabase/migrations/0014_time_groups.sql) ------------------
+
+export type TimeGroup = { id: string; name: string; color: string; start: string; end: string; interval: number };
+
+/** Кольори для нових груп по черзі — добре читаються і з білим текстом. */
+export const GROUP_COLORS = ["#8C57A8", "#2F80ED", "#27AE60", "#F2994A", "#EB5757", "#00A3A3", "#C2185B", "#6D4C41"];
+
+const TIME_RE = /^\d{2}:\d{2}$/;
+const COLOR_RE = /^#[0-9a-fA-F]{6}$/;
+
+export function defaultGroupName(index: number) {
+  return `Група ${index + 1}`;
+}
+
+/** Нормалізує групи з БД/запиту: відкидає зламані, підставляє назву й колір за замовчуванням. */
+export function parseTimeGroups(raw: unknown): TimeGroup[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((g) => g && TIME_RE.test(g.start) && TIME_RE.test(g.end) && Number(g.interval) >= 1)
+    .map((g, i) => ({
+      id: typeof g.id === "string" && g.id ? g.id : `g${i + 1}`,
+      name: typeof g.name === "string" && g.name.trim() ? g.name.trim() : defaultGroupName(i),
+      color: COLOR_RE.test(g.color) ? g.color : GROUP_COLORS[i % GROUP_COLORS.length],
+      start: g.start,
+      end: g.end,
+      interval: Math.min(240, Math.round(Number(g.interval))),
+    }));
+}
+
+/** Слоти групи: від start (вкл.) до end (не вкл.) з кроком interval. */
+export function groupSlots(group: Pick<TimeGroup, "start" | "end" | "interval">): string[] {
+  if (!TIME_RE.test(group.start) || !TIME_RE.test(group.end) || !(group.interval >= 1)) return [];
   const slots: string[] = [];
-  for (let t = from; t <= to && slots.length < 500; t += intervalMin) {
-    slots.push(`${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`);
+  for (let t = toMinutes(group.start); t < toMinutes(group.end) && slots.length < 300; t += group.interval) {
+    slots.push(toHHMM(t));
   }
   return slots;
+}
+
+/** Усі слоти всіх груп по порядку, без дублів (перетин груп — слот належить першій). */
+export function allSlots(groups: TimeGroup[]): { time: string; groupId: string }[] {
+  const seen = new Set<string>();
+  const out: { time: string; groupId: string }[] = [];
+  for (const g of groups) {
+    for (const time of groupSlots(g)) {
+      if (seen.has(time)) continue;
+      seen.add(time);
+      out.push({ time, groupId: g.id });
+    }
+  }
+  return out.sort((a, b) => a.time.localeCompare(b.time));
+}
+
+/** Група, в чий проміжок потрапляє час (навіть якщо адмін поставив його поза сіткою). */
+export function groupForTime(groups: TimeGroup[], time: string | null): TimeGroup | null {
+  if (!time) return null;
+  const t = toMinutes(time);
+  return groups.find((g) => t >= toMinutes(g.start) && t < toMinutes(g.end)) ?? null;
 }

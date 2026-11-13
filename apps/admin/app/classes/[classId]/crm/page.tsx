@@ -1,5 +1,5 @@
 import { createSupabaseServerClient } from "@otak/supabase";
-import { parseQuestions } from "@otak/supabase/cabinet";
+import { parseQuestions, parseTimeGroups } from "@otak/supabase/cabinet";
 import { Card } from "@otak/ui";
 import { notFound } from "next/navigation";
 import { CrmGrid } from "./crm-grid";
@@ -17,7 +17,7 @@ export default async function ClassCrmPage({ params }: { params: { classId: stri
   const { data: klass } = await supabase
     .from("classes")
     .select(
-      "id, name, album_type_id, shoot_date, slot_start, slot_end, slot_interval_min, parent_editing_enabled, questions, schools(name), album_types(name)"
+      "id, name, album_type_id, shoot_date, time_groups, parent_editing_enabled, questions, schools(name), album_types(name)"
     )
     .eq("id", params.classId)
     .maybeSingle();
@@ -37,9 +37,7 @@ export default async function ClassCrmPage({ params }: { params: { classId: stri
           id: klass.id,
           album_type_id: klass.album_type_id,
           shoot_date: klass.shoot_date,
-          slot_start: klass.slot_start,
-          slot_end: klass.slot_end,
-          slot_interval_min: klass.slot_interval_min,
+          time_groups: parseTimeGroups(klass.time_groups),
           parent_editing_enabled: klass.parent_editing_enabled,
           questions: parseQuestions(klass.questions),
         }}

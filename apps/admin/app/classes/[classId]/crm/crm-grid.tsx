@@ -5,7 +5,7 @@ import { PhotoPicker } from "./photo-picker";
 import { DualScroll } from "@otak/ui";
 import { Camera, Check, Clock, FileText, Gift, Link2, X } from "lucide-react";
 import { createSupabaseBrowserClient } from "@otak/supabase/browser";
-import { classChannel, type Question } from "@otak/supabase/cabinet";
+import { classChannel, groupForTime, type Question, type TimeGroup } from "@otak/supabase/cabinet";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
@@ -264,7 +264,15 @@ function MoneyCell({ value, onSave }: { value: number | null; onSave: (next: num
 }
 
 /** Час зйомки — адмін може поставити будь-який; помилка, якщо він зайнятий іншою дитиною. */
-function TimeCell({ value, onSave }: { value: string | null; onSave: (next: string | null) => Promise<string | null> }) {
+function TimeCell({
+  value,
+  group,
+  onSave,
+}: {
+  value: string | null;
+  group: TimeGroup | null;
+  onSave: (next: string | null) => Promise<string | null>;
+}) {
   const [draft, setDraft] = useState(value ?? "");
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
@@ -282,8 +290,14 @@ function TimeCell({ value, onSave }: { value: string | null; onSave: (next: stri
           setError(err);
           if (err) setDraft(value ?? "");
         }}
+        style={group ? { borderLeft: `4px solid ${group.color}` } : undefined}
         className="w-[92px] rounded-[7px] border border-line px-1.5 py-1 text-[12px] outline-none focus:border-purple"
       />
+      {group && (
+        <span className="max-w-[92px] truncate text-[9.5px] font-bold" style={{ color: group.color }}>
+          {group.name}
+        </span>
+      )}
       {error && <span className="max-w-[140px] text-[10px] font-semibold leading-tight text-warn">{error}</span>}
     </div>
   );
@@ -393,6 +407,7 @@ export function CrmGrid({ classId }: { classId: string }) {
   const [slots, setSlots] = useState<Slot[] | null>(null);
   const [students, setStudents] = useState<Student[] | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
+  const [timeGroups, setTimeGroups] = useState<TimeGroup[]>([]);
   const [pickerFor, setPickerFor] = useState<{ studentId: string; slot: Slot } | null>(null);
 
   function refetch() {
@@ -402,6 +417,7 @@ export function CrmGrid({ classId }: { classId: string }) {
         setSlots(data.slots ?? []);
         setStudents(data.students ?? []);
         setQuestions(data.questions ?? []);
+        setTimeGroups(data.timeGroups ?? []);
       });
   }
 
@@ -547,7 +563,10 @@ export function CrmGrid({ classId }: { classId: string }) {
             <tr key={student.id} className="border-b border-line align-middle">
               <td className="py-3 pr-3 text-ink-soft">{i + 1}</td>
               <td className="pr-3">
-                <TimeCell value={student.shoot_time} onSave={(next) => patchStudent(student.id, { shootTime: next })} />
+                <TimeCell
+                  value={student.shoot_time}
+                  group={groupForTime(timeGroups, student.shoot_time)}
+                  onSave={(next) => patchStudent(student.id, { shootTime: next })} />
               </td>
               <td className="whitespace-nowrap pr-5 font-semibold">
                 {student.last_name} {student.first_name}

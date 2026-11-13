@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createSupabaseServiceRoleClient } from "@otak/supabase";
-import { broadcastClassChange, generateSlots, hhmm, parseQuestions } from "@otak/supabase/cabinet";
+import { allSlots, broadcastClassChange, hhmm, parseQuestions, parseTimeGroups } from "@otak/supabase/cabinet";
 
 /**
  * Особистий кабінет дитини (батьків) — supabase/migrations/0013_parent_cabinet.sql.
@@ -21,7 +21,7 @@ async function currentStudent() {
   const { data } = await supabase
     .from("students")
     .select(
-      "id, class_id, classes(id, name, status, album_type_id, shoot_date, slot_start, slot_end, slot_interval_min, parent_editing_enabled, questions, schools(name))"
+      "id, class_id, classes(id, name, status, album_type_id, shoot_date, time_groups, parent_editing_enabled, questions, schools(name))"
     )
     .eq("session_token", token)
     .maybeSingle();
@@ -36,7 +36,8 @@ export async function GET() {
   const { supabase, studentId, klass } = ctx;
 
   const questions = parseQuestions(klass.questions);
-  const slots = generateSlots(hhmm(klass.slot_start), hhmm(klass.slot_end), klass.slot_interval_min);
+  const timeGroups = parseTimeGroups(klass.time_groups);
+  const slots = allSlots(timeGroups);
 
   const [{ data: students }, { data: photoSlots }, { count: photoCount }] = await Promise.all([
     supabase
@@ -108,6 +109,7 @@ export async function GET() {
       shootDate: klass.shoot_date,
       editingEnabled: klass.parent_editing_enabled,
     },
+    timeGroups,
     slots,
     taken,
     questions,
@@ -129,7 +131,7 @@ export async function PUT(req: Request) {
   const body = await req.json().catch(() => ({}));
 
   if (body.shootTime !== undefined) {
-    const slots = generateSlots(hhmm(klass.slot_start), hhmm(klass.slot_end), klass.slot_interval_min);
+    const slots = allSlots(parseTimeGroups(klass.time_groups)).map((s) => s.time);
     if (body.shootTime !== null && !slots.includes(body.shootTime)) {
       return NextResponse.json({ error: "Такого часу немає серед доступних" }, { status: 400 });
     }

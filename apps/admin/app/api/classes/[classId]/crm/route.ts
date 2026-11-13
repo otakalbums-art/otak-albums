@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServiceRoleClient } from "@otak/supabase/server";
 import { requireAdmin } from "@/lib/require-admin";
-import { parseQuestions } from "@otak/supabase/cabinet";
+import { parseQuestions, parseTimeGroups } from "@otak/supabase/cabinet";
 
 /**
  * GET /api/classes/[classId]/crm — CRM-таблиця класу: слоти типу альбому
@@ -19,7 +19,7 @@ export async function GET(_req: Request, { params }: { params: { classId: string
 
   const { data: klass } = await service
     .from("classes")
-    .select("id, album_type_id, questions")
+    .select("id, album_type_id, questions, time_groups")
     .eq("id", params.classId)
     .maybeSingle();
 
@@ -127,5 +127,5 @@ export async function GET(_req: Request, { params }: { params: { classId: string
     values: valuesByStudent.get(s.id) ?? {},
   }));
 
-  return NextResponse.json({ slots: slots ?? [], students: mappedStudents, questions, hasAlbumType: !!klass.album_type_id });
+  return NextResponse.json({ slots: slots ?? [], students: mappedStudents, questions, timeGroups: parseTimeGroups(klass.time_groups), hasAlbumType: !!klass.album_type_id });
 }

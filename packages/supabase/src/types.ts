@@ -133,6 +133,7 @@ export type Database = {
           slot_interval_min: number;
           parent_editing_enabled: boolean;
           questions: Json;
+          time_groups: Json;
         };
         Insert: {
           id?: string;
@@ -148,6 +149,7 @@ export type Database = {
           slot_interval_min?: number;
           parent_editing_enabled?: boolean;
           questions?: Json;
+          time_groups?: Json;
         };
         Update: {
           id?: string;
@@ -163,6 +165,7 @@ export type Database = {
           slot_interval_min?: number;
           parent_editing_enabled?: boolean;
           questions?: Json;
+          time_groups?: Json;
         };
         Relationships: [
           { foreignKeyName: "classes_school_id_fkey"; columns: ["school_id"]; isOneToOne: false; referencedRelation: "schools"; referencedColumns: ["id"] },

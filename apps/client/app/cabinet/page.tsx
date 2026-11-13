@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button, Card, DualScroll } from "@otak/ui";
 import { GroupList } from "./group-list";
 import { createSupabaseBrowserClient } from "@otak/supabase/browser";
-import { classChannel, type Question } from "@otak/supabase/cabinet";
+import { classChannel, groupForTime, groupSlots, type Question, type TimeGroup } from "@otak/supabase/cabinet";
 import { CalendarDays, CalendarX, Check, Clock, Images, Loader2, Lock, Users } from "lucide-react";
 import { redirectToLogin } from "@/lib/session-redirect";
 
@@ -20,7 +20,8 @@ type Row = {
 type CabinetData = {
   meId: string;
   class: { id: string; name: string; school: string; shootDate: string | null; editingEnabled: boolean };
-  slots: string[];
+  timeGroups: TimeGroup[];
+  slots: { time: string; groupId: string }[];
   taken: Record<string, string>;
   questions: Question[];
   photoSlots: { id: string; label: string }[];
@@ -142,35 +143,63 @@ export default function CabinetPage() {
               <div className="mb-2 flex items-center gap-1.5 text-[12.5px] font-semibold">
                 <Clock className="h-4 w-4 text-purple" />
                 {me.shootTime ? `Ваш час: ${me.shootTime}` : "Оберіть час фотосесії"}
+                {groupForTime(data.timeGroups, me.shootTime) && (
+                  <span
+                    className="rounded-full px-2 py-0.5 text-[10.5px] font-bold text-white"
+                    style={{ background: groupForTime(data.timeGroups, me.shootTime)!.color }}
+                  >
+                    {groupForTime(data.timeGroups, me.shootTime)!.name}
+                  </span>
+                )}
               </div>
-              {data.slots.length === 0 ? (
+              {data.timeGroups.length === 0 ? (
                 <p className="text-xs text-ink-soft">Час ще не відкрито для вибору — фотограф додасть його згодом.</p>
               ) : (
-                <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-8">
-                  {data.slots.map((t) => {
-                    const owner = data.taken[t];
-                    const mine = owner === data.meId;
-                    const busy = !!owner && !mine;
+                <div className="flex flex-col gap-3">
+                  {data.timeGroups.map((g) => {
+                    const times = groupSlots(g);
+                    const free = times.filter((t) => !data.taken[t]).length;
                     return (
-                      <button
-                        key={t}
-                        disabled={!canEdit || busy || mine || timeBusy !== null}
-                        onClick={() => pickTime(t)}
-                        className={`rounded-[8px] border px-1 py-2 text-[12.5px] font-semibold transition-colors ${
-                          mine
-                            ? "border-purple bg-purple text-white"
-                            : busy
-                              ? "cursor-not-allowed border-line bg-page text-ink-soft/50 line-through"
-                              : "border-line bg-card text-ink hover:border-purple disabled:opacity-60"
-                        }`}
-                      >
-                        {timeBusy === t ? "…" : t}
-                      </button>
+                      <div key={g.id} className="rounded-[12px] border-l-4 bg-page/70 p-2.5" style={{ borderLeftColor: g.color }}>
+                        <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5 px-0.5">
+                          <span className="flex items-center gap-1.5 text-[13px] font-bold">
+                            <span className="h-2.5 w-2.5 rounded-full" style={{ background: g.color }} />
+                            {g.name}
+                          </span>
+                          <span className="text-[11px] text-ink-soft">
+                            {g.start}–{g.end} · вільно {free} з {times.length}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-8">
+                          {times.map((t) => {
+                            const owner = data.taken[t];
+                            const mine = owner === data.meId;
+                            const busy = !!owner && !mine;
+                            return (
+                              <button
+                                key={t}
+                                disabled={!canEdit || busy || mine || timeBusy !== null}
+                                onClick={() => pickTime(t)}
+                                style={mine ? { background: g.color, borderColor: g.color } : busy ? undefined : { borderColor: `${g.color}66` }}
+                                className={`rounded-[8px] border-[1.5px] px-1 py-2 text-[12.5px] font-semibold transition-colors ${
+                                  mine
+                                    ? "text-white"
+                                    : busy
+                                      ? "cursor-not-allowed border-line bg-page text-ink-soft/50 line-through"
+                                      : "bg-card text-ink hover:brightness-95 disabled:opacity-60"
+                                }`}
+                              >
+                                {timeBusy === t ? "…" : t}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
                     );
                   })}
                 </div>
               )}
-              {me.shootTime && canEdit && data.slots.includes(me.shootTime) && (
+              {me.shootTime && canEdit && data.slots.some((x) => x.time === me.shootTime) && (
                 <button
                   onClick={() => pickTime(null)}
                   disabled={timeBusy !== null}
@@ -240,7 +269,7 @@ export default function CabinetPage() {
             <Users className="h-4 w-4" /> Уся група
             {data.slots.length > 0 && (
               <span className="ml-1 rounded-full bg-purple-pale px-2 py-0.5 text-[10.5px] font-semibold text-purple-deep">
-                вільно {data.slots.filter((t) => !data.taken[t]).length} з {data.slots.length}
+                вільно {data.slots.filter((x) => !data.taken[x.time]).length} з {data.slots.length}
               </span>
             )}
           </span>
@@ -249,7 +278,13 @@ export default function CabinetPage() {
       >
         {/* Телефон — розклад картками */}
         <div className="sm:hidden">
-          <GroupList rows={data.rows} meId={data.meId} questions={data.questions} photoSlots={data.photoSlots} />
+          <GroupList
+            rows={data.rows}
+            meId={data.meId}
+            questions={data.questions}
+            photoSlots={data.photoSlots}
+            timeGroups={data.timeGroups}
+          />
         </div>
 
         {/* Комп'ютер/планшет — таблиця як у Google Sheets */}
@@ -277,7 +312,18 @@ export default function CabinetPage() {
                 const bg = mine ? "bg-purple-pale" : "bg-card";
                 return (
                   <tr key={r.id} className={`border-b border-line align-top ${mine ? "bg-purple-pale" : ""}`}>
-                    <td className="whitespace-nowrap py-2.5 pr-3 font-semibold">{r.shootTime ?? "—"}</td>
+                    <td className="whitespace-nowrap py-2.5 pr-3 font-semibold">
+                      <span className="inline-flex items-center gap-1.5">
+                        {groupForTime(data.timeGroups, r.shootTime) && (
+                          <span
+                            className="h-2.5 w-2.5 rounded-full"
+                            title={groupForTime(data.timeGroups, r.shootTime)!.name}
+                            style={{ background: groupForTime(data.timeGroups, r.shootTime)!.color }}
+                          />
+                        )}
+                        {r.shootTime ?? "—"}
+                      </span>
+                    </td>
                     <td className={`sticky left-0 z-10 whitespace-nowrap py-2.5 pr-4 font-semibold ${bg}`}>
                       {r.name}
                       {r.staffRole && (
