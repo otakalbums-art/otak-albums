@@ -323,7 +323,7 @@ export default function CabinetPage() {
             <thead>
               <tr className="border-b-[1.5px] border-line text-left text-[11px] font-bold text-ink-soft">
                 <th className="py-2 pr-3">Час</th>
-                <th className="sticky left-0 z-10 bg-card py-2 pr-4">Прізвище та ім'я</th>
+                <th className="sticky left-0 z-10 bg-card py-2 pl-3 pr-4">Прізвище та ім'я</th>
                 <th className="whitespace-nowrap px-3 py-2">Додатково</th>
                 {data.photoSlots.map((s) => (
                   <th key={s.id} className="whitespace-nowrap px-3 py-2">
@@ -353,7 +353,7 @@ export default function CabinetPage() {
                     >
                       {r.shootTime ?? "—"}
                     </td>
-                    <td className={`sticky left-0 z-10 whitespace-nowrap py-2.5 pr-4 font-semibold ${bg}`}>
+                    <td className={`sticky left-0 z-10 whitespace-nowrap py-2.5 pl-3 pr-4 font-semibold ${bg}`}>
                       {r.name}
                       {r.staffRole && (
                         <span className="ml-1.5 rounded-full bg-line px-1.5 py-0.5 text-[9.5px] font-bold text-ink-soft">

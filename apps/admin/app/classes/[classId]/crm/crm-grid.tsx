@@ -654,7 +654,7 @@ export function CrmGrid({ classId }: { classId: string }) {
                 <Clock className="h-3.5 w-3.5" /> Час
               </span>
             </th>
-            <th className="whitespace-nowrap pr-5">Прізвище та ім'я</th>
+            <th className="whitespace-nowrap pl-4 pr-5">Прізвище та ім'я</th>
             {hasSlots && <th className="whitespace-nowrap pr-5">Прогрес</th>}
             <th className="whitespace-nowrap pr-5">Замовлення</th>
             <th className="whitespace-nowrap pr-3">Завдаток</th>
@@ -696,7 +696,7 @@ export function CrmGrid({ classId }: { classId: string }) {
                   group={groupForTime(timeGroups, student.shoot_time)}
                   onSave={(next) => patchStudent(student.id, { shootTime: next })} />
               </td>
-              <td className="whitespace-nowrap pr-5 font-semibold">
+              <td className="whitespace-nowrap pl-4 pr-5 font-semibold">
                 {student.last_name} {student.first_name}
                 {student.staff_role && (
                   <span className="ml-1.5 rounded-full bg-line px-1.5 py-0.5 text-[9.5px] font-bold text-ink-soft">
