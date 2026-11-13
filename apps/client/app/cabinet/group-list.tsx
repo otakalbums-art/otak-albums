@@ -102,16 +102,6 @@ export function GroupList({
                     ? "Анкету ще не заповнено"
                     : ""}
             </span>
-            {r.extras.length > 0 && (
-              <span className="mt-1 flex flex-wrap items-center gap-1">
-                <ShoppingBag className="h-3 w-3 text-[#8A6D00]" />
-                {r.extras.map((e) => (
-                  <span key={e.name} className="rounded-full bg-[#FFF4D6] px-1.5 py-px text-[10.5px] font-semibold text-[#8A6D00]">
-                    {extraLabel(e)}
-                  </span>
-                ))}
-              </span>
-            )}
           </span>
           {questions.length > 0 && !r.staffRole && (
             <span className="flex flex-shrink-0 items-center gap-1 text-[10.5px] font-semibold text-ink-soft">
@@ -120,6 +110,21 @@ export function GroupList({
             </span>
           )}
         </button>
+
+        {/* Замовлені послуги — окремим рядком на всю ширину картки, щоб текст не переносився. */}
+        {r.extras.length > 0 && (
+          <div className="-mt-0.5 flex flex-wrap gap-1.5 px-3 pb-2.5">
+            {r.extras.map((e) => (
+              <span
+                key={e.name}
+                className="inline-flex items-center gap-1.5 rounded-[9px] bg-[#FFF4D6] px-2.5 py-1.5 text-[11.5px] font-semibold leading-tight text-[#8A6D00]"
+              >
+                <ShoppingBag className="h-3.5 w-3.5 flex-shrink-0" />
+                {extraLabel(e)}
+              </span>
+            ))}
+          </div>
+        )}
 
         {expanded && (
           <dl className="grid gap-2 border-t border-line/70 px-3.5 pb-3 pt-2.5">

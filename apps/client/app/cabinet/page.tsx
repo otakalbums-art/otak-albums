@@ -35,7 +35,7 @@ function ExtrasChips({ extras }: { extras: { name: string; quantity: number }[] 
   return (
     <span className="flex flex-wrap gap-1">
       {extras.map((e) => (
-        <span key={e.name} className="whitespace-nowrap rounded-full bg-[#FFF4D6] px-2 py-0.5 text-[11px] font-semibold text-[#8A6D00]">
+        <span key={e.name} className="whitespace-nowrap rounded-[9px] bg-[#FFF4D6] px-2.5 py-1.5 text-[11.5px] font-semibold leading-tight text-[#8A6D00]">
           {extraLabel(e)}
         </span>
       ))}
