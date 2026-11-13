@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Button, Card, DualScroll } from "@otak/ui";
-import { GroupList } from "./group-list";
+import { GroupList, extraLabel } from "./group-list";
 import { createSupabaseBrowserClient } from "@otak/supabase/browser";
 import { classChannel, groupForTime, groupSlots, type Question, type TimeGroup } from "@otak/supabase/cabinet";
 import { CalendarDays, CalendarX, Check, Clock, Images, Loader2, Lock, ShoppingBag, Users } from "lucide-react";
@@ -36,7 +36,7 @@ function ExtrasChips({ extras }: { extras: { name: string; quantity: number }[] 
     <span className="flex flex-wrap gap-1">
       {extras.map((e) => (
         <span key={e.name} className="whitespace-nowrap rounded-full bg-[#FFF4D6] px-2 py-0.5 text-[11px] font-semibold text-[#8A6D00]">
-          {e.name} · {e.quantity} шт.
+          {extraLabel(e)}
         </span>
       ))}
     </span>
@@ -269,7 +269,7 @@ export default function CabinetPage() {
           {me.extras.length > 0 && (
             <div className="mt-4 border-t border-line pt-3.5">
               <div className="mb-1.5 flex items-center gap-1.5 text-[12.5px] font-semibold">
-                <ShoppingBag className="h-4 w-4 text-purple" /> Додатково замовлено
+                <ShoppingBag className="h-4 w-4 text-purple" /> Додаткові послуги
               </div>
               <ExtrasChips extras={me.extras} />
             </div>

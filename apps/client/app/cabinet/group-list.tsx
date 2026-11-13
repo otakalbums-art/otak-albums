@@ -14,6 +14,12 @@ export type GroupRow = {
   extras: { name: string; quantity: number }[];
 };
 
+/** "Замовлено індивідуальний розворот · 1 шт." */
+export function extraLabel(e: { name: string; quantity: number }) {
+  const name = e.name ? e.name[0].toLocaleLowerCase("uk-UA") + e.name.slice(1) : "";
+  return `Замовлено ${name} · ${e.quantity} шт.`;
+}
+
 function initials(name: string) {
   return name
     .split(/\s+/)
@@ -101,7 +107,7 @@ export function GroupList({
                 <ShoppingBag className="h-3 w-3 text-[#8A6D00]" />
                 {r.extras.map((e) => (
                   <span key={e.name} className="rounded-full bg-[#FFF4D6] px-1.5 py-px text-[10.5px] font-semibold text-[#8A6D00]">
-                    {e.name} · {e.quantity} шт.
+                    {extraLabel(e)}
                   </span>
                 ))}
               </span>
