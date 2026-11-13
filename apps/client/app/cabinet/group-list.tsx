@@ -101,8 +101,7 @@ export function GroupList({
                 <ShoppingBag className="h-3 w-3 text-[#8A6D00]" />
                 {r.extras.map((e) => (
                   <span key={e.name} className="rounded-full bg-[#FFF4D6] px-1.5 py-px text-[10.5px] font-semibold text-[#8A6D00]">
-                    {e.name}
-                    {e.quantity > 1 ? ` ×${e.quantity}` : ""}
+                    {e.name} · {e.quantity} шт.
                   </span>
                 ))}
               </span>

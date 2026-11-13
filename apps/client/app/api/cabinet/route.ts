@@ -87,7 +87,11 @@ export async function GET() {
   const extrasBy = new Map<string, { name: string; quantity: number }[]>();
   for (const o of ordered ?? []) {
     const list = extrasBy.get(o.student_id) ?? [];
-    list.push({ name: (o as any).album_options?.name ?? "", quantity: o.quantity });
+    // "(за шт.)" у назві — підказка до ціни для адміна; батькам цін не показуємо.
+    const name = String((o as any).album_options?.name ?? "")
+      .replace(/\s*\(\s*за\s+шт\.?\s*\)\s*/gi, " ")
+      .trim();
+    list.push({ name, quantity: o.quantity });
     extrasBy.set(o.student_id, list);
   }
 

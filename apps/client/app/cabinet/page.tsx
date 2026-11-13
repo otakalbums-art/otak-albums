@@ -36,8 +36,7 @@ function ExtrasChips({ extras }: { extras: { name: string; quantity: number }[] 
     <span className="flex flex-wrap gap-1">
       {extras.map((e) => (
         <span key={e.name} className="whitespace-nowrap rounded-full bg-[#FFF4D6] px-2 py-0.5 text-[11px] font-semibold text-[#8A6D00]">
-          {e.name}
-          {e.quantity > 1 ? ` ×${e.quantity}` : ""}
+          {e.name} · {e.quantity} шт.
         </span>
       ))}
     </span>
