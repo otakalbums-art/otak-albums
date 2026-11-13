@@ -175,7 +175,7 @@ export default function CabinetPage() {
                     const times = groupSlots(g);
                     const free = times.filter((t) => !data.taken[t]).length;
                     return (
-                      <div key={g.id} className="rounded-[12px] border-l-4 bg-page/70 p-2.5" style={{ borderLeftColor: g.color }}>
+                      <div key={g.id} className="rounded-[12px] border-l-4 p-2.5" style={{ borderLeftColor: g.color, background: `${g.color}12` }}>
                         <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5 px-0.5">
                           <span className="flex items-center gap-1.5 text-[13px] font-bold">
                             <span className="h-2.5 w-2.5 rounded-full" style={{ background: g.color }} />
@@ -199,14 +199,14 @@ export default function CabinetPage() {
                                   mine
                                     ? { background: g.color, borderColor: g.color }
                                     : busy
-                                      ? undefined
-                                      : { background: `${g.color}26`, borderColor: `${g.color}80` }
+                                      ? { background: `${g.color}4D`, borderColor: "transparent" }
+                                      : { background: `${g.color}1F`, borderColor: g.color }
                                 }
                                 className={`rounded-[8px] border-[1.5px] px-1 py-2 text-[12.5px] font-semibold transition-colors ${
                                   mine
                                     ? "text-white"
                                     : busy
-                                      ? "cursor-not-allowed border-line bg-page text-ink-soft/50 line-through"
+                                      ? "cursor-not-allowed text-ink/45 line-through"
                                       : "text-ink hover:brightness-95 disabled:opacity-60"
                                 }`}
                               >
