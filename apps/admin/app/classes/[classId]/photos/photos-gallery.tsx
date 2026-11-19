@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Download, FolderOpen } from "lucide-react";
+import { createSupabaseBrowserClient } from "@otak/supabase/browser";
 import { CategoryIcon } from "@/lib/photo-categories";
 
 type Photo = {
@@ -151,15 +152,57 @@ export function PhotosGallery({ classId }: { classId: string }) {
   const [category, setCategory] = useState<string>("all");
   const [kindFilter, setKindFilter] = useState<"all" | "jpeg" | "raw">("all");
 
+  const [live, setLive] = useState(false);
+  const loading = useRef(false);
+
+  /**
+   * Нові/видалені фото без перезавантаження сторінки: Supabase Realtime на
+   * таблиці photos (адмін автентифікований, RLS is_admin() пропускає події;
+   * publication увімкнено в 0002_realtime.sql) + запасне опитування раз на
+   * 20 с, якщо з'єднання з realtime обірветься.
+   */
   useEffect(() => {
     let cancelled = false;
-    fetch(`/api/classes/${classId}/photos`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (!cancelled) setPhotos(data.photos ?? []);
-      });
+
+    async function load() {
+      if (loading.current) return;
+      loading.current = true;
+      try {
+        const res = await fetch(`/api/classes/${classId}/photos`, { cache: "no-store" });
+        const data = await res.json();
+        if (cancelled) return;
+        const next: Photo[] = data.photos ?? [];
+        // Signed URL щоразу новий — для вже показаних фото лишаємо старий, щоб плитки не блимали.
+        setPhotos((prev) => {
+          const known = new Map((prev ?? []).map((p) => [p.id, p.url]));
+          return next.map((p) => (known.get(p.id) ? { ...p, url: known.get(p.id)! } : p));
+        });
+      } finally {
+        loading.current = false;
+      }
+    }
+
+    load();
+    const supabase = createSupabaseBrowserClient();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    // Камера шле кадри серіями — збираємо їх в одне оновлення.
+    const schedule = () => {
+      clearTimeout(timer);
+      timer = setTimeout(load, 800);
+    };
+    const channel = supabase
+      .channel(`admin-photos-${classId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "photos", filter: `class_id=eq.${classId}` }, schedule)
+      // DELETE з фільтром Supabase не доставляє (у події лише id) — слухаємо всі видалення.
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "photos" }, schedule)
+      .subscribe((status) => setLive(status === "SUBSCRIBED"));
+    const poll = setInterval(load, 20000);
+
     return () => {
       cancelled = true;
+      clearTimeout(timer);
+      clearInterval(poll);
+      supabase.removeChannel(channel);
     };
   }, [classId]);
 
@@ -185,6 +228,10 @@ export function PhotosGallery({ classId }: { classId: string }) {
 
   return (
     <div>
+      <p className="mb-2 flex items-center gap-1.5 text-[11px] text-ink-soft">
+        <span className={`h-2 w-2 rounded-full ${live ? "bg-ok" : "bg-line"}`} />
+        {live ? "Нові фото з'являються автоматично" : "Оновлення раз на 20 секунд"}
+      </p>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap gap-2">
           <button
