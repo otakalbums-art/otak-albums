@@ -9,6 +9,7 @@ type Photo = {
   id: string;
   filename: string;
   thumbnailUrl?: string;
+  version?: string;
   is_favorite: boolean;
 };
 
@@ -58,10 +59,11 @@ export default function GalleryPage() {
         // вже завантажений thumbnailUrl для фото, які вже бачили; is_favorite
         // все одно оновлюємо — раптом змінилось з іншого пристрою.
         setPhotos((prev) => {
-          const known = new Map(prev.map((p) => [p.id, p.thumbnailUrl]));
+          // Ключ — id + версія файлу: замінений камерою кадр отримує свіжий URL.
+          const known = new Map(prev.map((p) => [`${p.id}|${p.version}`, p.thumbnailUrl]));
           return (data.photos ?? []).map((p: Photo) => ({
             ...p,
-            thumbnailUrl: known.get(p.id) ?? p.thumbnailUrl,
+            thumbnailUrl: known.get(`${p.id}|${p.version}`) ?? p.thumbnailUrl,
           }));
         });
         if (data.class) setClassInfo(data.class);

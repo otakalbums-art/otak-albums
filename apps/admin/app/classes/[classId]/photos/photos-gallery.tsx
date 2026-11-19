@@ -174,8 +174,12 @@ export function PhotosGallery({ classId }: { classId: string }) {
         const next: Photo[] = data.photos ?? [];
         // Signed URL щоразу новий — для вже показаних фото лишаємо старий, щоб плитки не блимали.
         setPhotos((prev) => {
-          const known = new Map((prev ?? []).map((p) => [p.id, p.url]));
-          return next.map((p) => (known.get(p.id) ? { ...p, url: known.get(p.id)! } : p));
+          // Ключ — id + шлях файлу: якщо камера перенадіслала кадр, показуємо новий файл.
+          const known = new Map((prev ?? []).map((p) => [`${p.id}|${p.storage_path}`, p.url]));
+          return next.map((p) => {
+            const url = known.get(`${p.id}|${p.storage_path}`);
+            return url ? { ...p, url } : p;
+          });
         });
       } finally {
         loading.current = false;

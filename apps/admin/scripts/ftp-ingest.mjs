@@ -26,12 +26,15 @@
  *      "personal" тут без прив'язки до конкретного учня (student_id=null) —
  *      набирати UUID учня в меню камери нереалістично; прив'язати вручну
  *      можна пізніше через адмінку.
- *   3) Стежить (chokidar) за локальною папкою-приймачем; коли файл
- *      дописаний повністю (awaitWriteFinish) і це валідний JPEG або
+ *   3) Коли камера завершила передачу файлу (подія STOR), і це цілий JPEG
+ *      (є маркер кінця FF D9 — обрізаний кадр не публікуємо) або
  *      відомий RAW-формат (CR2/NEF/ARW/... — див. RAW_EXTENSIONS нижче) —
  *      вивантажує в Supabase Storage bucket "photos" (у підпапку JPEG/ або
  *      RAW/ усередині категорії — система сама обирає за розширенням) і
  *      вставляє рядок у таблицю `photos` — так само, як POST /api/photos/upload.
+ *      JPEG іде одразу (до 3 паралельно), RAW — окремою чергою по одному й
+ *      лише коли JPEG на відправку немає. Повторно надісланий кадр (та сама
+ *      назва в тій самій категорії) замінює файл у наявному записі.
  *   4) Учні бачать нове JPEG-фото миттєво: галерея вже підписана на
  *      postgres_changes INSERT (apps/client/app/gallery/page.tsx), і її API
  *      відфільтровує RAW (apps/client/app/api/photos/route.ts, file_type =
@@ -42,7 +45,6 @@
 
 import { createClient } from "@supabase/supabase-js";
 import FtpSrv, { FileSystem } from "ftp-srv";
-import chokidar from "chokidar";
 import { createHmac, randomUUID, timingSafeEqual } from "crypto";
 import { networkInterfaces } from "os";
 import { fileURLToPath } from "url";
@@ -258,6 +260,15 @@ ftpServer.on("login", async ({ username, password, connection }, resolve, reject
     fs.mkdirSync(path.join(root, category), { recursive: true });
   }
   log(`[ftp] ✓ підключення від камери, клас ${match.id}`);
+  // Файл обробляємо лише тоді, коли камера сама завершила передачу (STOR),
+  // а не після паузи в записі: на повільному Wi-Fi пауза ≠ кінець файлу.
+  connection.on("STOR", (error, serverPath) => {
+    if (error) {
+      log(`[ftp] ✗ передачу перервано (${error.message}) — чекаю повторної спроби камери`);
+      return;
+    }
+    if (serverPath) enqueue(serverPath);
+  });
   resolve({ fs: new GlobAwareFileSystem(connection, { root }) });
 });
 
@@ -265,7 +276,7 @@ ftpServer.on("client-error", ({ context, error }) => {
   log(`[ftp] ✗ помилка з'єднання (${context}): ${error.message}`);
 });
 
-// --- watcher: коли файл дописаний -> вивантажити в Storage ---
+// --- обробка файлу після STOR -> вивантажити в Storage ---
 async function isJpeg(filePath) {
   const fd = await fs.promises.open(filePath, "r");
   const buf = Buffer.alloc(3);
@@ -274,13 +285,72 @@ async function isJpeg(filePath) {
   return buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff;
 }
 
+/**
+ * Цілий JPEG закінчується маркером EOI (FF D9). Шукаємо його в останніх
+ * 64 КБ (деякі камери дописують після нього службові нулі). Нема маркера —
+ * файл обірвався посеред передачі.
+ */
+async function jpegComplete(filePath) {
+  const { size } = await fs.promises.stat(filePath);
+  if (size < 4) return false;
+  const len = Math.min(size, 64 * 1024);
+  const fd = await fs.promises.open(filePath, "r");
+  const buf = Buffer.alloc(len);
+  await fd.read(buf, 0, len, size - len);
+  await fd.close();
+  for (let i = len - 2; i >= 0; i--) {
+    if (buf[i] === 0xff && buf[i + 1] === 0xd9) return true;
+  }
+  return false;
+}
+
+// --- черги: JPEG одразу (до 3 паралельно), RAW по одному й лише коли JPEG немає ---
+// Батьки бачать лише JPEG, тож він ніколи не чекає за важким RAW.
+const JPEG_CONCURRENCY = 3;
+const jpegQueue = [];
+const rawQueue = [];
+let jpegActive = 0;
+let rawActive = false;
+
+function enqueue(filePath) {
+  const fileType = detectFileType(path.basename(filePath));
+  if (!fileType) {
+    log(`[ftp-ingest] пропущено (не JPEG і не відомий RAW-формат): ${path.relative(DROP_ROOT, filePath)}`);
+    return;
+  }
+  const queue = fileType === "jpeg" ? jpegQueue : rawQueue;
+  if (!queue.includes(filePath)) queue.push(filePath);
+  pump();
+}
+
+function pump() {
+  while (jpegActive < JPEG_CONCURRENCY && jpegQueue.length) {
+    const next = jpegQueue.shift();
+    jpegActive++;
+    ingest(next).finally(() => {
+      jpegActive--;
+      pump();
+    });
+  }
+  if (!rawActive && jpegActive === 0 && jpegQueue.length === 0 && rawQueue.length) {
+    const next = rawQueue.shift();
+    rawActive = true;
+    ingest(next).finally(() => {
+      rawActive = false;
+      pump();
+    });
+  }
+}
+
 async function ingest(filePath) {
   const rel = path.relative(DROP_ROOT, filePath);
   const segments = rel.split(path.sep);
   const classId = segments[0];
   const filename = path.basename(filePath);
 
-  if (segments.includes("_ingested") || segments.includes("_errors")) return;
+  if (segments.includes("_ingested") || segments.includes("_errors") || segments.includes("_incomplete")) return;
+  // Файл могли вже обробити/перемістити (повторна STOR того ж шляху в черзі).
+  if (!fs.existsSync(filePath)) return;
 
   const fileType = detectFileType(filename);
   if (!fileType) {
@@ -308,6 +378,14 @@ async function ingest(filePath) {
       log(`[ftp-ingest] файл не є валідним JPEG (за magic bytes), пропускаю: ${rel}`);
       return;
     }
+    if (fileType === "jpeg" && !(await jpegComplete(filePath))) {
+      // Не публікуємо обрізаний кадр — камера зазвичай шле його повторно.
+      const dest = path.join(DROP_ROOT, classId, category, "_incomplete", `${Date.now()}-${filename}`);
+      await fs.promises.mkdir(path.dirname(dest), { recursive: true });
+      await fs.promises.rename(filePath, dest);
+      log(`[ftp-ingest] ⚠ ${filename} недокачаний (немає кінця JPEG) — не публікую, чекаю повторної передачі`);
+      return;
+    }
 
     const bytes = await fs.promises.readFile(filePath);
     const folder = folderFor(fileType);
@@ -319,14 +397,35 @@ async function ingest(filePath) {
       .upload(storagePath, bytes, { contentType, upsert: false });
     if (uploadError) throw uploadError;
 
-    const { error: insertError } = await supabase.from("photos").insert({
-      class_id: classId,
-      storage_path: storagePath,
-      filename,
-      file_type: fileType,
-      category,
-    });
-    if (insertError) throw insertError;
+    // Той самий кадр уже є (камера перенадіслала після обриву) — замінюємо файл
+    // у наявному записі: вибір учнів, обране й CRM-слоти, прив'язані до id, лишаються.
+    const { data: existing } = await supabase
+      .from("photos")
+      .select("id, storage_path")
+      .eq("class_id", classId)
+      .eq("category", category)
+      .eq("filename", filename)
+      .order("uploaded_at", { ascending: false })
+      .limit(1);
+    const previous = existing?.[0];
+
+    if (previous) {
+      const { error: updateError } = await supabase
+        .from("photos")
+        .update({ storage_path: storagePath, file_type: fileType, uploaded_at: new Date().toISOString() })
+        .eq("id", previous.id);
+      if (updateError) throw updateError;
+      await supabase.storage.from("photos").remove([previous.storage_path]).catch(() => {});
+    } else {
+      const { error: insertError } = await supabase.from("photos").insert({
+        class_id: classId,
+        storage_path: storagePath,
+        filename,
+        file_type: fileType,
+        category,
+      });
+      if (insertError) throw insertError;
+    }
 
     // _ingested лежить всередині тієї ж категорійної підпапки, щоб два
     // різні кадри з однаковою назвою з різних категорій не перезаписали одне одного.
@@ -334,7 +433,9 @@ async function ingest(filePath) {
     await fs.promises.mkdir(path.dirname(dest), { recursive: true });
     await fs.promises.rename(filePath, dest);
 
-    log(`[ftp-ingest] ✓ ${filename} -> клас ${classId}, категорія "${category}", ${folder} (${fileType})`);
+    log(
+      `[ftp-ingest] ✓ ${filename} -> клас ${classId}, категорія "${category}", ${folder} (${fileType})${previous ? " — замінено попередню версію" : ""}`
+    );
   } catch (err) {
     log(`[ftp-ingest] ✗ помилка для ${rel}: ${err.message}`);
     const dest = path.join(DROP_ROOT, classId, category, "_errors", filename);
@@ -343,12 +444,28 @@ async function ingest(filePath) {
   }
 }
 
-const watcher = chokidar.watch(DROP_ROOT, {
-  ignored: (p) => p.includes("_ingested") || p.includes("_errors"),
-  ignoreInitial: false,
-  awaitWriteFinish: { stabilityThreshold: 1500, pollInterval: 200 },
-});
-watcher.on("add", ingest);
+// Копії вже відправлених файлів (_ingested) і обрізані (_incomplete) лежать на
+// диску сервера лише як страховка — старші за 3 дні видаляємо, щоб диск не заповнився.
+const KEEP_MS = 3 * 24 * 60 * 60 * 1000;
+async function cleanupOld(dir = DROP_ROOT) {
+  let entries = [];
+  try {
+    entries = await fs.promises.readdir(dir, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  for (const e of entries) {
+    const full = path.join(dir, e.name);
+    if (e.isDirectory()) {
+      await cleanupOld(full);
+    } else if (/[\\/](_ingested|_incomplete)[\\/]/.test(full)) {
+      const { mtimeMs } = await fs.promises.stat(full).catch(() => ({ mtimeMs: Date.now() }));
+      if (Date.now() - mtimeMs > KEEP_MS) await fs.promises.unlink(full).catch(() => {});
+    }
+  }
+}
+cleanupOld();
+setInterval(cleanupOld, 6 * 60 * 60 * 1000);
 
 // --- control-сервер: адмінка (Vercel) керує увімк/вимк і читає статус
 // звідси по HTTP, бо сама тримати цей процес не може (serverless).
@@ -421,7 +538,6 @@ Promise.all([ftpServer.listen(), startControlServer])
 
 process.on("SIGINT", async () => {
   await ftpServer.close();
-  await watcher.close();
   controlServer.close();
   process.exit(0);
 });

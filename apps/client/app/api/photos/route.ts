@@ -50,6 +50,8 @@ export async function GET(req: Request) {
       id: p.id,
       filename: p.filename,
       thumbnailUrl: urlByPath.get(p.storage_path),
+      // Змінюється, коли камера перенадіслала кадр і файл замінено — галерея тоді бере новий URL.
+      version: p.storage_path,
       is_favorite: p.favorites?.some((f: any) => f.student_id === student.id),
     }))
     .filter((p: any) => !favoritesOnly || p.is_favorite);
