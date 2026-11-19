@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { PhotoPicker } from "./photo-picker";
 import { DualScroll } from "@otak/ui";
+import { LinksMessage } from "./links-message";
 import { Camera, Check, Clock, FileText, Gift, Link2, Plus, ShoppingBag, X } from "lucide-react";
 import { createSupabaseBrowserClient } from "@otak/supabase/browser";
 import { classChannel, groupForTime, type Question, type TimeGroup } from "@otak/supabase/cabinet";
@@ -513,7 +514,7 @@ function AddStudentRow({ colSpan, onAdd }: { colSpan: number; onAdd: (firstName:
   );
 }
 
-export function CrmGrid({ classId }: { classId: string }) {
+export function CrmGrid({ classId, title, shootDate }: { classId: string; title: string; shootDate: string | null }) {
   const [slots, setSlots] = useState<Slot[] | null>(null);
   const [students, setStudents] = useState<Student[] | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -644,6 +645,7 @@ export function CrmGrid({ classId }: { classId: string }) {
 
   return (
     <div>
+      <LinksMessage students={students} timeGroups={timeGroups} title={title} shootDate={shootDate} />
       <DualScroll>
       <table className="min-w-max border-collapse text-[13px]">
         <thead>

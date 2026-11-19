@@ -56,7 +56,11 @@ export default async function ClassCrmPage({ params }: { params: { classId: stri
         )}
         Клікни на будь-яку клітинку, щоб змінити. Зміни від батьків з'являються тут автоматично.
       </p>
-      <CrmGrid classId={klass.id} />
+      <CrmGrid
+        classId={klass.id}
+        title={`${klass.name}, ${(klass as any).schools?.name ?? ""}`}
+        shootDate={klass.shoot_date}
+      />
     </Card>
   );
 }
