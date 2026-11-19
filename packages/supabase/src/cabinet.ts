@@ -64,7 +64,19 @@ function toHHMM(t: number) {
 
 // --- Часові групи (supabase/migrations/0014_time_groups.sql) ------------------
 
-export type TimeGroup = { id: string; name: string; color: string; start: string; end: string; interval: number };
+/**
+ * count — скільки дітей у групі задав адмін (необов'язково). Якщо задано,
+ * слотів рівно стільки (не більше, ніж вміщає проміжок з кроком interval).
+ */
+export type TimeGroup = {
+  id: string;
+  name: string;
+  color: string;
+  start: string;
+  end: string;
+  interval: number;
+  count?: number;
+};
 
 /** Кольори для нових груп по черзі — добре читаються і з білим текстом. */
 export const GROUP_COLORS = ["#8C57A8", "#2F80ED", "#27AE60", "#F2994A", "#EB5757", "#00A3A3", "#C2185B", "#6D4C41"];
@@ -88,17 +100,27 @@ export function parseTimeGroups(raw: unknown): TimeGroup[] {
       start: g.start,
       end: g.end,
       interval: Math.min(240, Math.round(Number(g.interval))),
+      ...(Number.isInteger(Number(g.count)) && Number(g.count) >= 1 ? { count: Math.min(300, Number(g.count)) } : {}),
     }));
 }
 
 /** Слоти групи: від start (вкл.) до end (не вкл.) з кроком interval. */
-export function groupSlots(group: Pick<TimeGroup, "start" | "end" | "interval">): string[] {
+export function groupSlots(group: Pick<TimeGroup, "start" | "end" | "interval" | "count">): string[] {
   if (!TIME_RE.test(group.start) || !TIME_RE.test(group.end) || !(group.interval >= 1)) return [];
+  const max = group.count && group.count >= 1 ? group.count : 300;
   const slots: string[] = [];
-  for (let t = toMinutes(group.start); t < toMinutes(group.end) && slots.length < 300; t += group.interval) {
+  for (let t = toMinutes(group.start); t < toMinutes(group.end) && slots.length < max; t += group.interval) {
     slots.push(toHHMM(t));
   }
   return slots;
+}
+
+/** Хвилин на дитину, щоб N дітей рівномірно вмістились у проміжок start–end. */
+export function intervalForCount(start: string, end: string, count: number) {
+  if (!TIME_RE.test(start) || !TIME_RE.test(end) || !(count >= 1)) return null;
+  const duration = toMinutes(end) - toMinutes(start);
+  if (duration <= 0) return null;
+  return Math.max(1, Math.min(240, Math.floor(duration / count)));
 }
 
 /** Усі слоти всіх груп по порядку, без дублів (перетин груп — слот належить першій). */

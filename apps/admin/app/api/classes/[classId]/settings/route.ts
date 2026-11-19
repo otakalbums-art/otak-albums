@@ -36,6 +36,19 @@ export async function PATCH(req: Request, { params }: { params: { classId: strin
       if (!Number.isInteger(interval) || interval < 1 || interval > 240) {
         return NextResponse.json({ error: `Група ${n}: хвилин на дитину — від 1 до 240` }, { status: 400 });
       }
+      if (g.count !== undefined && g.count !== null && g.count !== "") {
+        const count = Number(g.count);
+        if (!Number.isInteger(count) || count < 1 || count > 300) {
+          return NextResponse.json({ error: `Група ${n}: кількість дітей — від 1 до 300` }, { status: 400 });
+        }
+        const fits = groupSlots({ start: g.start, end: g.end, interval });
+        if (fits.length < count) {
+          return NextResponse.json(
+            { error: `Група ${n}: у ${g.start}–${g.end} по ${interval} хв вміщається лише ${fits.length} дітей` },
+            { status: 400 }
+          );
+        }
+      }
     }
     const groups = parseTimeGroups(raw.map((g) => ({ ...g, id: g.id || randomUUID().slice(0, 8) })));
     const sorted = [...groups].sort((a, b) => a.start.localeCompare(b.start));

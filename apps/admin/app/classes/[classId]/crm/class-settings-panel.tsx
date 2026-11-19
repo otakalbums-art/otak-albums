@@ -8,6 +8,7 @@ import {
   KINDERGARTEN_QUESTIONS,
   defaultGroupName,
   groupSlots,
+  intervalForCount,
   type Question,
   type TimeGroup,
 } from "@otak/supabase/cabinet";
@@ -60,7 +61,32 @@ export function ClassSettingsPanel({ settings, albumTypes }: { settings: ClassSe
   const questionsDirty = JSON.stringify(questions) !== JSON.stringify(settings.questions);
 
   function updateGroup(i: number, patch: Partial<TimeGroup>) {
-    setGroups((prev) => prev.map((g, idx) => (idx === i ? { ...g, ...patch } : g)));
+    setGroups((prev) =>
+      prev.map((g, idx) => {
+        if (idx !== i) return g;
+        const next = { ...g, ...patch };
+        // Кількість дітей задана адміном — при зміні проміжку перераховуємо хвилини.
+        if (next.count && (patch.start !== undefined || patch.end !== undefined)) {
+          next.interval = intervalForCount(next.start, next.end, next.count) ?? next.interval;
+        }
+        return next;
+      })
+    );
+  }
+
+  /** Адмін вписав кількість дітей — ділимо проміжок рівномірно. */
+  function setGroupCount(i: number, raw: string) {
+    const count = Math.round(Number(raw));
+    setGroups((prev) =>
+      prev.map((g, idx) => {
+        if (idx !== i) return g;
+        if (!raw || !(count >= 1)) {
+          const { count: _drop, ...rest } = g;
+          return rest;
+        }
+        return { ...g, count, interval: intervalForCount(g.start, g.end, count) ?? g.interval };
+      })
+    );
   }
 
   /** Нова група починається там, де закінчилась попередня, з тим самим кроком. */
@@ -164,13 +190,29 @@ export function ClassSettingsPanel({ settings, albumTypes }: { settings: ClassSe
                     min={1}
                     max={240}
                     value={g.interval}
-                    onChange={(e) => updateGroup(i, { interval: Number(e.target.value) })}
+                    // Ручні хвилини — кількість дітей знову рахується з проміжку.
+                    onChange={(e) => {
+                      const { count: _drop, ...rest } = g;
+                      setGroups((prev) => prev.map((x, idx) => (idx === i ? { ...rest, interval: Number(e.target.value) } : x)));
+                    }}
                     className={`${input} mt-0.5 block w-[86px]`}
                   />
                 </label>
-                <span className="pb-1.5 text-[11.5px] font-bold" style={{ color: g.color }}>
-                  {count} {count === 1 ? "дитина" : count >= 2 && count <= 4 ? "дитини" : "дітей"}
-                </span>
+                <label className="text-[10.5px] text-ink-soft">
+                  Дітей у групі
+                  <input
+                    type="number"
+                    min={1}
+                    max={300}
+                    value={g.count ?? count}
+                    onChange={(e) => setGroupCount(i, e.target.value)}
+                    className={`${input} mt-0.5 block w-[86px] font-bold`}
+                    style={{ color: g.color }}
+                  />
+                </label>
+                {g.count !== undefined && count < g.count && (
+                  <span className="pb-1.5 text-[11px] font-semibold text-warn">вміщається лише {count}</span>
+                )}
                 <button
                   onClick={() => setGroups((prev) => prev.filter((_, idx) => idx !== i))}
                   aria-label="Прибрати групу"
@@ -193,7 +235,8 @@ export function ClassSettingsPanel({ settings, albumTypes }: { settings: ClassSe
           </div>
         </div>
         <p className="mt-2 text-[10.5px] text-ink-soft">
-          Слоти — від «Від» до «До» (не включно) з кроком «Хв на дитину». Напр. 16:00–16:20 по 5 хв = 4 дитини.
+          Задайте «Дітей у групі» — проміжок поділиться рівномірно (напр. 09:15–10:04 і 7 дітей = по 7 хв). Або
+          вкажіть «Хв на дитину» — кількість порахується сама.
           Без назви група стане «Група 1», «Група 2»…
         </p>
         {scheduleDirty && (
