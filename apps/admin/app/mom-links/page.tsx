@@ -134,13 +134,13 @@ export default function MomLinksPage() {
       <Card menu={false}>
         <div className="mb-3.5 flex flex-wrap items-end gap-2.5 border-b border-line pb-3.5">
           <div>
-            <label className="mb-1 block text-[11px] font-semibold text-ink-soft">Клас</label>
+            <label className="mb-1 block text-[11px] font-semibold text-ink-soft">Клас / група</label>
             <select
               value={newClassId}
               onChange={(e) => setNewClassId(e.target.value)}
               className="rounded-[9px] border border-line px-2.5 py-1.5 text-xs outline-none focus:border-purple"
             >
-              <option value="">— Оберіть клас —</option>
+              <option value="">— Оберіть клас або групу —</option>
               {classes.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
@@ -165,7 +165,7 @@ export default function MomLinksPage() {
         <table className="w-full text-[13px]">
           <thead>
             <tr className="border-b-[1.5px] border-line text-left text-[11px] font-bold text-ink-soft">
-              <th className="py-2">Клас</th>
+              <th className="py-2">Клас / група</th>
               <th>Посилання</th>
               <th>Термін дії (год)</th>
               <th>Активне до</th>

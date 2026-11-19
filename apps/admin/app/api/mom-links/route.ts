@@ -17,7 +17,7 @@ export async function GET() {
 
   const { data: links } = await supabase
     .from("mom_links")
-    .select("id, token, expires_at, is_active, created_at, classes(name)")
+    .select("id, token, expires_at, is_active, created_at, classes(name, schools(name))")
     .order("created_at", { ascending: false });
 
   const { data: settings } = await supabase
@@ -25,12 +25,21 @@ export async function GET() {
     .select("mom_links_globally_disabled, push_mom_link_checks_enabled")
     .single();
 
-  const { data: classes } = await supabase.from("classes").select("id, name").neq("status", "archived").order("name");
+  const { data: rawClasses } = await supabase
+    .from("classes")
+    .select("id, name, schools(name)")
+    .neq("status", "archived")
+    .order("name");
+  // "Старша 1 — 33 садок": без назви закладу однакові класи різних шкіл не відрізнити.
+  const withSchool = (name: string, school?: string | null) => (school ? `${name} — ${school}` : name);
+  const classes = (rawClasses ?? [])
+    .map((c: any) => ({ id: c.id, name: withSchool(c.name, c.schools?.name) }))
+    .sort((a, b) => a.name.localeCompare(b.name, "uk"));
 
   const mapped = (links ?? []).map((l: any) => ({
     id: l.id,
     token: l.token,
-    class_name: l.classes?.name ?? "—",
+    class_name: l.classes ? withSchool(l.classes.name, l.classes.schools?.name) : "—",
     hours: Math.max(1, Math.round((new Date(l.expires_at).getTime() - new Date(l.created_at).getTime()) / 3_600_000)),
     expires_at: l.expires_at,
     is_active: l.is_active,
@@ -41,7 +50,7 @@ export async function GET() {
     globalDisabled: !!settings?.mom_links_globally_disabled,
     pushChecksEnabled: settings?.push_mom_link_checks_enabled ?? true,
     pushLastCheckAt: schedulerLastCheckAt(),
-    classes: classes ?? [],
+    classes,
   });
 }
 
