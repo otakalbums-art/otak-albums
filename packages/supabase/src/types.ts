@@ -31,6 +31,7 @@ export type Json = string | number | boolean | null | { [key: string]: Json | un
 // замість голого string, інакше компоненти, які звужують за конкретними
 // значеннями (напр. SlotsEditor за kind: "photo"|"text"), не приймають Row.
 type ClassStatus = "pending" | "active" | "archived";
+type ClassKind = "school" | "kindergarten";
 type PhotoFileType =
   | "jpeg"
   | "cr2"
@@ -134,6 +135,7 @@ export type Database = {
           parent_editing_enabled: boolean;
           questions: Json;
           time_groups: Json;
+          kind: ClassKind;
         };
         Insert: {
           id?: string;
@@ -150,6 +152,7 @@ export type Database = {
           parent_editing_enabled?: boolean;
           questions?: Json;
           time_groups?: Json;
+          kind?: ClassKind;
         };
         Update: {
           id?: string;
@@ -166,6 +169,7 @@ export type Database = {
           parent_editing_enabled?: boolean;
           questions?: Json;
           time_groups?: Json;
+          kind?: ClassKind;
         };
         Relationships: [
           { foreignKeyName: "classes_school_id_fkey"; columns: ["school_id"]; isOneToOne: false; referencedRelation: "schools"; referencedColumns: ["id"] },

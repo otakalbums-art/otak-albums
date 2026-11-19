@@ -11,7 +11,7 @@
  */
 export const ADMIN_TABS = [
   { key: "dashboard", label: "Дашборд", href: "/" },
-  { key: "classes", label: "Класи та папки", href: "/classes" },
+  { key: "classes", label: "Класи та групи", href: "/classes" },
   { key: "crm", label: "CRM", href: "/crm" },
   { key: "ftp", label: "Прийом з камер (Wi-Fi)", href: "/ftp-import" },
   { key: "album_types", label: "Типи альбомів", href: "/album-types" },

@@ -15,7 +15,7 @@ export default async function FtpImportPage() {
   const { data: classes } = await supabase
     .from("classes")
     .select("id, name, schools(name)")
-    .eq("status", "active")
+    .neq("status", "archived")
     .order("name");
 
   const classOptions = (classes ?? []).map((c: any) => ({

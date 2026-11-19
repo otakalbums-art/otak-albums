@@ -2,7 +2,7 @@ import { Card, StatusChip } from "@otak/ui";
 import { createSupabaseServerClient } from "@otak/supabase/server";
 import { CreateClassForm } from "./create-class-form";
 import { ReferralLinkCell } from "./referral-link-cell";
-import { Archive, ClipboardList, Images, Upload } from "lucide-react";
+import { Archive, Baby, ClipboardList, Images, Upload } from "lucide-react";
 import { ClassRowActions, ParentEditingToggle } from "./class-row-actions";
 
 /**
@@ -19,7 +19,7 @@ export default async function ClassesPage() {
   const supabase = createSupabaseServerClient();
   const { data: classes } = await supabase
     .from("classes")
-    .select("id, name, referral_code, status, parent_editing_enabled, schools(name), photos(id)")
+    .select("id, name, kind, referral_code, status, parent_editing_enabled, schools(name), photos(id)")
     .order("created_at", { ascending: false });
 
   const { data: schools } = await supabase.from("schools").select("id, name").order("name");
@@ -37,7 +37,7 @@ export default async function ClassesPage() {
       <Card
         title={
           <div className="flex w-full items-center justify-between">
-            <span>Класи</span>
+            <span>Класи та групи садочка</span>
           </div>
         }
         menu={false}
@@ -98,7 +98,7 @@ function ClassesTable({ classes }: { classes: any[] }) {
         </colgroup>
         <thead>
           <tr className="border-b-[1.5px] border-line text-left text-[11px] font-bold text-ink-soft">
-            <th className="px-3 py-2">Клас</th>
+            <th className="px-3 py-2">Клас / група</th>
             <th className="px-3 py-2">Фото</th>
             <th className="px-3 py-2">Реф. посилання</th>
             <th className="px-3 py-2">Статус</th>
@@ -110,6 +110,11 @@ function ClassesTable({ classes }: { classes: any[] }) {
           {classes.map((c: any) => (
             <tr key={c.id} className="border-b border-line">
               <td className="px-3 py-2.5">
+                {c.kind === "kindergarten" && (
+                  <span className="mr-1.5 inline-flex items-center gap-1 rounded-full bg-[#E3F4EA] px-1.5 py-0.5 align-middle text-[10px] font-bold text-[#1E7B47]">
+                    <Baby className="h-3 w-3" /> садочок
+                  </span>
+                )}
                 {c.name}, {c.schools?.name}
               </td>
               <td className="px-3 py-2.5">{c.photos?.length ?? 0}</td>
@@ -148,7 +153,7 @@ function ClassesTable({ classes }: { classes: any[] }) {
           {classes.length === 0 && (
             <tr>
               <td colSpan={6} className="px-3 py-4 text-ink-soft">
-                Активних класів немає.
+                Активних класів і груп немає.
               </td>
             </tr>
           )}

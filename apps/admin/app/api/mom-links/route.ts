@@ -25,7 +25,7 @@ export async function GET() {
     .select("mom_links_globally_disabled, push_mom_link_checks_enabled")
     .single();
 
-  const { data: classes } = await supabase.from("classes").select("id, name").eq("status", "active").order("name");
+  const { data: classes } = await supabase.from("classes").select("id, name").neq("status", "archived").order("name");
 
   const mapped = (links ?? []).map((l: any) => ({
     id: l.id,

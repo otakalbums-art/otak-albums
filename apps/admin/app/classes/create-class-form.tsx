@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@otak/ui";
+import { Baby, School } from "lucide-react";
 
 type School = { id: string; name: string };
 type AlbumType = { id: string; name: string; category: string | null };
@@ -21,6 +22,7 @@ function groupByCategory(types: AlbumType[]): [string, AlbumType[]][] {
 export function CreateClassForm({ schools, albumTypes }: { schools: School[]; albumTypes: AlbumType[] }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [kind, setKind] = useState<"school" | "kindergarten">("school");
   const [name, setName] = useState("");
   const [schoolId, setSchoolId] = useState("");
   const [newSchoolName, setNewSchoolName] = useState("");
@@ -35,6 +37,7 @@ export function CreateClassForm({ schools, albumTypes }: { schools: School[]; al
       method: "POST",
       body: JSON.stringify({
         name,
+        kind,
         schoolId: schoolId || undefined,
         newSchoolName: schoolId ? undefined : newSchoolName,
         albumTypeId: albumTypeId || undefined,
@@ -44,7 +47,7 @@ export function CreateClassForm({ schools, albumTypes }: { schools: School[]; al
     setSaving(false);
 
     if (!res.ok) {
-      setError(data.error ?? "Не вдалося створити клас");
+      setError(data.error ?? (isKg ? "Не вдалося створити групу" : "Не вдалося створити клас"));
       return;
     }
 
@@ -54,11 +57,16 @@ export function CreateClassForm({ schools, albumTypes }: { schools: School[]; al
     router.refresh();
   }
 
+  const isKg = kind === "kindergarten";
+  // Для групи садочка — лише садочкові типи альбомів (якщо такі є).
+  const kgTypes = albumTypes.filter((t) => t.category?.toLowerCase().includes("садоч"));
+  const visibleTypes = isKg && kgTypes.length ? kgTypes : albumTypes;
+
   if (!open) {
     return (
       <div className="mb-3 flex justify-end">
         <Button size="sm" className="w-auto" onClick={() => setOpen(true)}>
-          + Створити папку класу
+          + Створити клас або групу
         </Button>
       </div>
     );
@@ -66,24 +74,45 @@ export function CreateClassForm({ schools, albumTypes }: { schools: School[]; al
 
   return (
     <div className="mb-3.5 flex flex-col gap-2.5 rounded-[11px] border border-line p-3.5">
+      <div className="inline-flex w-fit rounded-[10px] bg-page p-1">
+        {(
+          [
+            ["school", "Клас школи", School],
+            ["kindergarten", "Група садочка", Baby],
+          ] as const
+        ).map(([value, label, Icon]) => (
+          <button
+            key={value}
+            onClick={() => {
+              setKind(value);
+              setAlbumTypeId("");
+            }}
+            className={`inline-flex items-center gap-1.5 rounded-[8px] px-3 py-1.5 text-[12px] font-semibold transition-colors ${
+              kind === value ? "bg-card text-purple-deep shadow-sm" : "text-ink-soft hover:text-ink"
+            }`}
+          >
+            <Icon className="h-3.5 w-3.5" /> {label}
+          </button>
+        ))}
+      </div>
       <div className="grid gap-2.5 sm:grid-cols-3">
         <div>
-          <label className="mb-1 block text-[11px] font-semibold text-ink-soft">Назва класу</label>
+          <label className="mb-1 block text-[11px] font-semibold text-ink-soft">{isKg ? "Назва групи" : "Назва класу"}</label>
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="11-А"
+            placeholder={isKg ? "Старша 1" : "11-А"}
             className="w-full rounded-[9px] border border-line px-2.5 py-1.5 text-xs outline-none focus:border-purple"
           />
         </div>
         <div>
-          <label className="mb-1 block text-[11px] font-semibold text-ink-soft">Школа</label>
+          <label className="mb-1 block text-[11px] font-semibold text-ink-soft">{isKg ? "Садочок" : "Школа"}</label>
           <select
             value={schoolId}
             onChange={(e) => setSchoolId(e.target.value)}
             className="w-full rounded-[9px] border border-line px-2.5 py-1.5 text-xs outline-none focus:border-purple"
           >
-            <option value="">— Нова школа —</option>
+            <option value="">{isKg ? "— Новий садочок —" : "— Нова школа —"}</option>
             {schools.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name}
@@ -94,7 +123,7 @@ export function CreateClassForm({ schools, albumTypes }: { schools: School[]; al
             <input
               value={newSchoolName}
               onChange={(e) => setNewSchoolName(e.target.value)}
-              placeholder="Назва нової школи"
+              placeholder={isKg ? "Назва нового садочка" : "Назва нової школи"}
               className="mt-1.5 w-full rounded-[9px] border border-line px-2.5 py-1.5 text-xs outline-none focus:border-purple"
             />
           )}
@@ -107,7 +136,7 @@ export function CreateClassForm({ schools, albumTypes }: { schools: School[]; al
             className="w-full rounded-[9px] border border-line px-2.5 py-1.5 text-xs outline-none focus:border-purple"
           >
             <option value="">— Без типу —</option>
-            {groupByCategory(albumTypes).map(([category, types]) => (
+            {groupByCategory(visibleTypes).map(([category, types]) => (
               <optgroup key={category} label={category}>
                 {types.map((t) => (
                   <option key={t.id} value={t.id}>

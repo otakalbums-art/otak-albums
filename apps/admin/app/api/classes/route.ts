@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { randomBytes } from "crypto";
 import { createSupabaseServiceRoleClient } from "@otak/supabase/server";
 import { requireAdmin } from "@/lib/require-admin";
+import { KINDERGARTEN_QUESTIONS } from "@otak/supabase/cabinet";
 import { transliterate } from "@/lib/slugify";
 
 function slugify(name: string) {
@@ -26,10 +27,18 @@ export async function POST(req: Request) {
   const user = await requireAdmin("classes");
   if (!user) return NextResponse.json({ error: "Доступ заборонено" }, { status: 403 });
 
-  const { schoolId, newSchoolName, albumTypeId, name } = await req.json();
-  if (!name?.trim()) return NextResponse.json({ error: "Вкажіть назву класу" }, { status: 400 });
+  const { schoolId, newSchoolName, albumTypeId, name, kind: rawKind } = await req.json();
+  // "kindergarten" — група дитячого садка (supabase/migrations/0016_class_kind.sql).
+  const kind = rawKind === "kindergarten" ? "kindergarten" : "school";
+  const isKg = kind === "kindergarten";
+  if (!name?.trim()) {
+    return NextResponse.json({ error: isKg ? "Вкажіть назву групи" : "Вкажіть назву класу" }, { status: 400 });
+  }
   if (!schoolId && !newSchoolName?.trim()) {
-    return NextResponse.json({ error: "Оберіть школу або вкажіть назву нової" }, { status: 400 });
+    return NextResponse.json(
+      { error: isKg ? "Оберіть садочок або вкажіть назву нового" : "Оберіть школу або вкажіть назву нової" },
+      { status: 400 }
+    );
   }
 
   const supabase = createSupabaseServiceRoleClient();
@@ -57,6 +66,10 @@ export async function POST(req: Request) {
       album_type_id: albumTypeId || null,
       name: name.trim(),
       referral_code: referralCode,
+      kind,
+      status: "active",
+      // Група садочка одразу з анкетою садочка — її можна змінити в CRM.
+      questions: isKg ? KINDERGARTEN_QUESTIONS : [],
     })
     .select("*, schools(name)")
     .single();

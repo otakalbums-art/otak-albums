@@ -241,7 +241,8 @@ const ftpServer = new FtpSrv({
 ftpServer.on("login", async ({ username, password, connection }, resolve, reject) => {
   if (!enabled) return reject(new Error("Прийом вимкнено в адмінці"));
 
-  const { data: classes } = await supabase.from("classes").select("id").eq("status", "active");
+  // Усі неархівні класи/групи (раніше лише "active", а нові класи лишались "pending" і не могли підключитись).
+  const { data: classes } = await supabase.from("classes").select("id").neq("status", "archived");
   const match = (classes ?? []).find((c) => {
     const cred = ftpCredentialsForClass(c.id);
     return cred.username === username && cred.password === password;
