@@ -3,11 +3,11 @@ import { cookies } from "next/headers";
 import { createSupabaseServiceRoleClient } from "@otak/supabase";
 
 /**
- * PUT /api/album-slots/[slotId] — учень призначає слоту фото зі своїх
- * favorites. Body: { photoIds: string[] }
+ * PUT /api/album-slots/[slotId] — учень призначає слоту фото свого класу
+ * (з обраного або загальної галереї). Body: { photoIds: string[] }
  *
  * Перевірки: слот — kind='photo' типу альбому класу учня; кожен photoId —
- * серед favorites цього учня (не можна підсунути чуже/непозначене фото);
+ * JPEG цього ж класу (не можна підсунути чуже фото);
  * не більше slot.max_photos. Будь-яка зміна скидає
  * students.selection_confirmed_at — підтверджений відбір мусить точно
  * відповідати тому, що учень явно затвердив.
@@ -22,7 +22,7 @@ export async function PUT(req: Request, { params }: { params: { slotId: string }
   const supabase = createSupabaseServiceRoleClient();
   const { data: student } = await supabase
     .from("students")
-    .select("id, classes(album_type_id)")
+    .select("id, class_id, classes(album_type_id)")
     .eq("session_token", sessionToken)
     .single();
   if (!student) return NextResponse.json({ error: "Сесія недійсна" }, { status: 401 });
@@ -39,11 +39,16 @@ export async function PUT(req: Request, { params }: { params: { slotId: string }
     return NextResponse.json({ error: `Для цього слота можна обрати не більше ${slot.max_photos} фото` }, { status: 400 });
   }
 
+  // Обирати можна будь-яке JPEG-фото свого класу — з обраного чи із загальної галереї.
   if (photoIds.length > 0) {
-    const { data: ownFavorites } = await supabase.from("favorites").select("photo_id").eq("student_id", student.id);
-    const favoriteIds = new Set((ownFavorites ?? []).map((f: any) => f.photo_id));
-    if (!photoIds.every((id: string) => favoriteIds.has(id))) {
-      return NextResponse.json({ error: "Можна обирати лише зі свого обраного" }, { status: 400 });
+    const { data: own } = await supabase
+      .from("photos")
+      .select("id")
+      .eq("class_id", (student as any).class_id)
+      .eq("file_type", "jpeg")
+      .in("id", photoIds);
+    if ((own ?? []).length !== new Set(photoIds).size) {
+      return NextResponse.json({ error: "Можна обирати лише фото свого класу" }, { status: 400 });
     }
   }
 

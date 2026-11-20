@@ -13,7 +13,7 @@ type TextSlot = { id: string; key: string; label: string };
 /**
  * "Сформувати альбом" — учень заповнює ті самі CRM-слоти (Портрет 1,
  * Фото 1 студія...), що налаштовані для типу альбому його класу, обираючи
- * фото зі свого "Обраного" (apps/client/app/gallery). Обмеження "не
+ * фото з усієї галереї класу або зі свого "Обраного" (apps/client/app/gallery). Обмеження "не
  * більше й не менше" тримається самою структурою слотів — просто немає
  * зайвого місця, куди покласти більше фото, ніж треба.
  *
@@ -28,6 +28,8 @@ export default function AlbumPage() {
   const [slots, setSlots] = useState<Slot[] | null>(null);
   const [assignments, setAssignments] = useState<Record<string, Photo[]>>({});
   const [favorites, setFavorites] = useState<Photo[]>([]);
+  // Уся галерея класу для вкладки «Усі фото» в пікері — тягнемо при першому відкритті.
+  const [allPhotos, setAllPhotos] = useState<Photo[] | null>(null);
   const [confirmedAt, setConfirmedAt] = useState<string | null>(null);
   const [pickerSlot, setPickerSlot] = useState<Slot | null>(null);
   const [confirming, setConfirming] = useState(false);
@@ -91,8 +93,30 @@ export default function AlbumPage() {
     }
   }
 
+  function openPicker(slot: Slot) {
+    setPickerSlot(slot);
+    if (allPhotos !== null) return;
+    fetch("/api/photos")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!data) return;
+        setAllPhotos(
+          (data.photos ?? []).map((p: { id: string; filename: string; thumbnailUrl?: string }) => ({
+            id: p.id,
+            filename: p.filename,
+            url: p.thumbnailUrl ?? null,
+          }))
+        );
+      })
+      .catch(() => {});
+  }
+
   async function saveSlot(slotId: string, photoIds: string[]) {
-    await fetch(`/api/album-slots/${slotId}`, { method: "PUT", body: JSON.stringify({ photoIds }) });
+    const res = await fetch(`/api/album-slots/${slotId}`, { method: "PUT", body: JSON.stringify({ photoIds }) });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error ?? "Не вдалося зберегти");
+    }
     setPickerSlot(null);
     setConfirmMessage(null);
     await refetch();
@@ -114,7 +138,7 @@ export default function AlbumPage() {
     return (
       <Card menu={false}>
         <p className="text-sm text-ink-soft">
-          Для типу альбому твого класу ще не налаштовано жодного фото-слота — зверніся до фотографа.
+          Для типу альбому твого класу ще не налаштовано жодного фото-слота — звернися до фотографа.
         </p>
       </Card>
     );
@@ -129,7 +153,8 @@ export default function AlbumPage() {
         <div>
           <h1 className="text-lg font-bold">Сформувати альбом</h1>
           <p className="text-xs text-ink-soft">
-            Обирай фото зі свого обраного <Heart className="inline h-3 w-3 -translate-y-px fill-purple text-purple" /> під кожне місце в альбомі. Заповнено {filledCount}/{slots.length}.
+            Обирай фото під кожне місце в альбомі — з усієї галереї або зі свого обраного{" "}
+            <Heart className="inline h-3 w-3 -translate-y-px fill-purple text-purple" />. Заповнено {filledCount}/{slots.length}.
           </p>
         </div>
         {confirmedAt && (
@@ -141,11 +166,12 @@ export default function AlbumPage() {
 
       {favorites.length === 0 && (
         <p className="mb-4 rounded-[10px] bg-purple-pale p-3.5 text-xs text-ink-soft">
-          У тебе ще немає обраних фото — спершу зайди в{" "}
+          Порада: познач фото, що сподобались, сердечком{" "}
+          <Heart className="inline h-3 w-3 -translate-y-px fill-purple text-purple" /> у{" "}
           <a href="/gallery" className="font-semibold text-purple hover:underline">
-            галерею
+            галереї
           </a>{" "}
-          і познач потрібні фото сердечком <Heart className="inline h-3 w-3 -translate-y-px fill-purple text-purple" />.
+          — тоді їх легко знайти у вкладці «Обране». А можна обирати й одразу з усіх фото.
         </p>
       )}
 
@@ -155,7 +181,7 @@ export default function AlbumPage() {
           return (
             <button
               key={slot.id}
-              onClick={() => setPickerSlot(slot)}
+              onClick={() => openPicker(slot)}
               className="flex flex-col items-start gap-2 rounded-xl border border-line bg-card p-3 text-left hover:border-purple-soft"
             >
               <span className="text-[12.5px] font-bold">{slot.label}</span>
@@ -190,7 +216,8 @@ export default function AlbumPage() {
         <PhotoPicker
           slotLabel={pickerSlot.label}
           maxPhotos={pickerSlot.max_photos}
-          photos={favorites}
+          favorites={favorites}
+          allPhotos={allPhotos}
           initialPhotoIds={(assignments[pickerSlot.id] ?? []).map((p) => p.id)}
           onSave={(photoIds) => saveSlot(pickerSlot.id, photoIds)}
           onClose={() => setPickerSlot(null)}
