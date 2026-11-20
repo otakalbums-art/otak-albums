@@ -79,10 +79,19 @@ const filenameCollator = new Intl.Collator("uk", { numeric: true, sensitivity: "
  * назва — JPEG раніше за RAW.
  */
 export function compareFilenames(a: string, b: string) {
+  return compareFrames(a, b, false);
+}
+
+/** Від нових до старих: більший номер кадру першим (JPEG усе одно раніше за свій RAW). */
+export function compareFilenamesDesc(a: string, b: string) {
+  return compareFrames(a, b, true);
+}
+
+function compareFrames(a: string, b: string, desc: boolean) {
   const baseA = a.replace(/\.[^.]+$/, "");
   const baseB = b.replace(/\.[^.]+$/, "");
   const byBase = filenameCollator.compare(baseA, baseB);
-  if (byBase) return byBase;
+  if (byBase) return desc ? -byBase : byBase;
   const isJpeg = (n: string) => /\.jpe?g$/i.test(n);
   return Number(isJpeg(b)) - Number(isJpeg(a)) || filenameCollator.compare(a, b);
 }

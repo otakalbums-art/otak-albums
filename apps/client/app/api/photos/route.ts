@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createSupabaseServiceRoleClient } from "@otak/supabase";
-import { compareFilenames, signPhotoUrls } from "@otak/supabase/photo-variants";
+import { compareFilenamesDesc, signPhotoUrls } from "@otak/supabase/photo-variants";
 
 /**
  * GET /api/photos            — усі фото класу поточного учня + прапорець favorite + class {name, schoolName}
@@ -59,8 +59,8 @@ export async function GET(req: Request) {
       is_favorite: p.favorites?.some((f: any) => f.student_id === student.id),
     }))
     .filter((p: any) => !favoritesOnly || p.is_favorite)
-    // Чітко за номером кадру, а не за часом надходження (дві камери шлють упереміш).
-    .sort((a: any, b: any) => compareFilenames(a.filename, b.filename));
+    // За номером кадру, від нових до старих (не за часом надходження — камера дошлює старі кадри впереміш).
+    .sort((a: any, b: any) => compareFilenamesDesc(a.filename, b.filename));
 
   return NextResponse.json({ photos: mapped, class: classInfo });
 }

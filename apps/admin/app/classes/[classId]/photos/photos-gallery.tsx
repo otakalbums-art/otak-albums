@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Download, FolderOpen } from "lucide-react";
 import { createSupabaseBrowserClient } from "@otak/supabase/browser";
 import { CategoryIcon } from "@/lib/photo-categories";
-import { compareFilenames } from "@otak/supabase/photo-variants";
+import { compareFilenamesDesc } from "@otak/supabase/photo-variants";
 
 type Photo = {
   id: string;
@@ -96,8 +96,8 @@ function groupShots(photos: Photo[]): Shot[] {
     }
   }
 
-  // Плитки за номером кадру (R6__0738, R6__0739, …), як у галереї батьків.
-  return shots.sort((a, b) => compareFilenames(a.baseName, b.baseName));
+  // Плитки за номером кадру, від нових до старих (R6__1890, R6__1889, …), як у галереї батьків.
+  return shots.sort((a, b) => compareFilenamesDesc(a.baseName, b.baseName));
 }
 
 function ShotTile({ shot }: { shot: Shot }) {
