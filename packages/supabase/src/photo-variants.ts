@@ -52,8 +52,17 @@ export async function signPhotoUrls(
 
   const wanted = unique.map((p) => (variant === "original" ? p : variantPath(p, variant) ?? p));
   const toSign = [...new Set([...wanted, ...(variant === "original" ? [] : unique)])];
-  const { data } = await client.storage.from("photos").createSignedUrls(toSign, expiresIn);
-  const byPath = new Map((data ?? []).filter((d) => d.signedUrl && d.path).map((d) => [d.path!, d.signedUrl!]));
+
+  // Storage приймає не більше 1000 шляхів за запит (більше -> помилка на весь
+  // запит і жодного URL), тож підписуємо пачками паралельно.
+  const CHUNK = 500;
+  const chunks: string[][] = [];
+  for (let i = 0; i < toSign.length; i += CHUNK) chunks.push(toSign.slice(i, i + CHUNK));
+  const results = await Promise.all(chunks.map((c) => client.storage.from("photos").createSignedUrls(c, expiresIn)));
+  const byPath = new Map<string, string>();
+  for (const { data } of results) {
+    for (const d of data ?? []) if (d.signedUrl && d.path) byPath.set(d.path, d.signedUrl);
+  }
 
   unique.forEach((orig, i) => {
     const url = byPath.get(wanted[i]) ?? byPath.get(orig);
