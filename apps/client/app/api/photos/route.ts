@@ -19,7 +19,7 @@ export async function GET(req: Request) {
   const supabase = createSupabaseServiceRoleClient();
   const { data: student } = await supabase
     .from("students")
-    .select("id, class_id, classes(name, schools(name))")
+    .select("id, class_id, classes(name, parent_gallery_enabled, parent_download_enabled, schools(name))")
     .eq("session_token", sessionToken)
     .single();
 
@@ -27,6 +27,13 @@ export async function GET(req: Request) {
 
   const studentClass = (student as any).classes;
   const classInfo = { name: studentClass?.name ?? "", schoolName: studentClass?.schools?.name ?? "" };
+  // Перемикачі адміна для класу (supabase/migrations/0017_parent_access_flags.sql).
+  const galleryEnabled = studentClass?.parent_gallery_enabled !== false;
+  const downloadEnabled = galleryEnabled && studentClass?.parent_download_enabled !== false;
+  // Перегляд закрито — фото й «Обране» лише приховуємо, у базі все лишається.
+  if (!galleryEnabled) {
+    return NextResponse.json({ photos: [], class: classInfo, galleryEnabled, downloadEnabled });
+  }
 
   const { searchParams } = new URL(req.url);
   const favoritesOnly = searchParams.get("favorites") === "1";
@@ -62,5 +69,5 @@ export async function GET(req: Request) {
     // За номером кадру, від нових до старих (не за часом надходження — камера дошлює старі кадри впереміш).
     .sort((a: any, b: any) => compareFilenamesDesc(a.filename, b.filename));
 
-  return NextResponse.json({ photos: mapped, class: classInfo });
+  return NextResponse.json({ photos: mapped, class: classInfo, galleryEnabled, downloadEnabled });
 }

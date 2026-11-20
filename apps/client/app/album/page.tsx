@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Card, Button } from "@otak/ui";
 import { PhotoPicker } from "./photo-picker";
 import { redirectToLogin } from "@/lib/session-redirect";
-import { Check, CheckCircle2, Heart } from "lucide-react";
+import { Check, CheckCircle2, EyeOff, Heart, Lock } from "lucide-react";
 
 type Photo = { id: string; filename: string; url: string | null };
 type Slot = { id: string; label: string; max_photos: number; sort_order: number };
@@ -31,6 +31,8 @@ export default function AlbumPage() {
   // Уся галерея класу для вкладки «Усі фото» в пікері — тягнемо при першому відкритті.
   const [allPhotos, setAllPhotos] = useState<Photo[] | null>(null);
   const [confirmedAt, setConfirmedAt] = useState<string | null>(null);
+  // Перемикачі адміна: перегляд фото (приховує й вибрані) і редагування (замикає вибір).
+  const [access, setAccess] = useState({ gallery: true, editing: true });
   const [pickerSlot, setPickerSlot] = useState<Slot | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [confirmMessage, setConfirmMessage] = useState<{ type: "ok" | "error"; text: string } | null>(null);
@@ -55,6 +57,7 @@ export default function AlbumPage() {
         setAssignments(data.assignments ?? {});
         setFavorites(data.favorites ?? []);
         setConfirmedAt(data.confirmedAt ?? null);
+        setAccess({ gallery: data.galleryEnabled !== false, editing: data.editingEnabled !== false });
       })
       .catch(() => {});
   }
@@ -94,6 +97,7 @@ export default function AlbumPage() {
   }
 
   function openPicker(slot: Slot) {
+    if (!access.gallery || !access.editing) return;
     setPickerSlot(slot);
     if (allPhotos !== null) return;
     fetch("/api/photos")
@@ -146,6 +150,7 @@ export default function AlbumPage() {
 
   const filledCount = slots.filter((s) => (assignments[s.id]?.length ?? 0) > 0).length;
   const allFilled = filledCount === slots.length;
+  const canPick = access.gallery && access.editing;
 
   return (
     <div>
@@ -164,7 +169,21 @@ export default function AlbumPage() {
         )}
       </div>
 
-      {favorites.length === 0 && (
+      {!access.gallery ? (
+        <p className="mb-4 flex items-start gap-2 rounded-[10px] bg-line/60 p-3.5 text-xs text-ink-soft">
+          <EyeOff className="mt-px h-4 w-4 flex-shrink-0" />
+          Перегляд фото зараз закритий фотографом. Твій вибір збережений — він з'явиться, щойно перегляд відкриють.
+        </p>
+      ) : (
+        !access.editing && (
+          <p className="mb-4 flex items-start gap-2 rounded-[10px] bg-line/60 p-3.5 text-xs text-ink-soft">
+            <Lock className="mt-px h-4 w-4 flex-shrink-0" />
+            Вибір фото для альбому закритий фотографом — зараз його можна лише переглянути.
+          </p>
+        )
+      )}
+
+      {canPick && favorites.length === 0 && (
         <p className="mb-4 rounded-[10px] bg-purple-pale p-3.5 text-xs text-ink-soft">
           Порада: познач фото, що сподобались, сердечком{" "}
           <Heart className="inline h-3 w-3 -translate-y-px fill-purple text-purple" /> у{" "}
@@ -182,12 +201,15 @@ export default function AlbumPage() {
             <button
               key={slot.id}
               onClick={() => openPicker(slot)}
-              className="flex flex-col items-start gap-2 rounded-xl border border-line bg-card p-3 text-left hover:border-purple-soft"
+              disabled={!canPick}
+              className={`flex flex-col items-start gap-2 rounded-xl border border-line bg-card p-3 text-left ${
+                canPick ? "hover:border-purple-soft" : "cursor-default"
+              }`}
             >
               <span className="text-[12.5px] font-bold">{slot.label}</span>
               {photos.length === 0 ? (
                 <span className="flex aspect-[4/5] w-full items-center justify-center rounded-[9px] border border-dashed border-line text-[11px] text-ink-soft">
-                  + Обрати
+                  {canPick ? "+ Обрати" : "—"}
                 </span>
               ) : (
                 <span
@@ -201,10 +223,10 @@ export default function AlbumPage() {
       </div>
 
       <div className="mt-5">
-        <Button onClick={handleConfirm} disabled={!allFilled || confirming} className="w-auto">
+        <Button onClick={handleConfirm} disabled={!canPick || !allFilled || confirming} className="w-auto">
           {confirming ? "Підтверджуємо…" : "Підтвердити відбір"}
         </Button>
-        {!allFilled && <p className="mt-1.5 text-[11.5px] text-ink-soft">Заповни всі місця вище, щоб підтвердити.</p>}
+        {canPick && !allFilled && <p className="mt-1.5 text-[11.5px] text-ink-soft">Заповни всі місця вище, щоб підтвердити.</p>}
         {confirmMessage && (
           <p className={`mt-2 text-[12.5px] font-semibold ${confirmMessage.type === "ok" ? "text-ok" : "text-warn"}`}>
             {confirmMessage.text}

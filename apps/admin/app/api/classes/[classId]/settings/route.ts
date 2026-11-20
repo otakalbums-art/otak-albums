@@ -11,7 +11,7 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 /**
  * PATCH /api/classes/[classId]/settings — налаштування кабінету батьків.
  * Body (усі поля необов'язкові): { shootDate, timeGroups: [{id?, name, color, start, end, interval}],
- *   parentEditingEnabled, questions: [{key?, label}], albumTypeId }
+ *   parentEditingEnabled, parentGalleryEnabled, parentDownloadEnabled, questions: [{key?, label}], albumTypeId }
  */
 export async function PATCH(req: Request, { params }: { params: { classId: string } }) {
   const user = await requireAdmin(["crm", "classes"]);
@@ -67,6 +67,8 @@ export async function PATCH(req: Request, { params }: { params: { classId: strin
   }
   if (body.albumTypeId !== undefined) update.album_type_id = body.albumTypeId || null;
   if (body.parentEditingEnabled !== undefined) update.parent_editing_enabled = !!body.parentEditingEnabled;
+  if (body.parentGalleryEnabled !== undefined) update.parent_gallery_enabled = !!body.parentGalleryEnabled;
+  if (body.parentDownloadEnabled !== undefined) update.parent_download_enabled = !!body.parentDownloadEnabled;
   if (body.questions !== undefined) {
     // Ключ питання стабільний (до нього прив'язані відповіді); нове питання отримує ключ з назви.
     const used = new Set<string>();

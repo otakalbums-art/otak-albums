@@ -133,6 +133,8 @@ export type Database = {
           slot_end: string | null;
           slot_interval_min: number;
           parent_editing_enabled: boolean;
+          parent_gallery_enabled: boolean;
+          parent_download_enabled: boolean;
           questions: Json;
           time_groups: Json;
           kind: ClassKind;
@@ -150,6 +152,8 @@ export type Database = {
           slot_end?: string | null;
           slot_interval_min?: number;
           parent_editing_enabled?: boolean;
+          parent_gallery_enabled?: boolean;
+          parent_download_enabled?: boolean;
           questions?: Json;
           time_groups?: Json;
           kind?: ClassKind;
@@ -167,6 +171,8 @@ export type Database = {
           slot_end?: string | null;
           slot_interval_min?: number;
           parent_editing_enabled?: boolean;
+          parent_gallery_enabled?: boolean;
+          parent_download_enabled?: boolean;
           questions?: Json;
           time_groups?: Json;
           kind?: ClassKind;

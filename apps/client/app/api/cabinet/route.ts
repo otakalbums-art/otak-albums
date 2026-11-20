@@ -21,7 +21,7 @@ async function currentStudent() {
   const { data } = await supabase
     .from("students")
     .select(
-      "id, class_id, classes(id, name, status, album_type_id, shoot_date, time_groups, parent_editing_enabled, questions, schools(name))"
+      "id, class_id, classes(id, name, status, album_type_id, shoot_date, time_groups, parent_editing_enabled, parent_gallery_enabled, questions, schools(name))"
     )
     .eq("session_token", token)
     .maybeSingle();
@@ -135,6 +135,7 @@ export async function GET() {
     questions,
     photoSlots: photoSlots ?? [],
     hasPhotos: (photoCount ?? 0) > 0,
+    galleryEnabled: klass.parent_gallery_enabled !== false,
     rows,
   });
 }

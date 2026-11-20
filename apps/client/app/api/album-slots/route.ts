@@ -18,15 +18,19 @@ export async function GET() {
   const supabase = createSupabaseServiceRoleClient();
   const { data: student } = await supabase
     .from("students")
-    .select("id, class_id, selection_confirmed_at, classes(album_type_id)")
+    .select("id, class_id, selection_confirmed_at, classes(album_type_id, parent_editing_enabled, parent_gallery_enabled)")
     .eq("session_token", sessionToken)
     .single();
 
   if (!student) return NextResponse.json({ error: "Сесія недійсна" }, { status: 401 });
 
-  const albumTypeId = (student as any).classes?.album_type_id;
+  const klass = (student as any).classes;
+  const albumTypeId = klass?.album_type_id;
+  // Перемикачі адміна: перегляд фото (приховує і вибрані фото) і редагування (замикає вибір).
+  const galleryEnabled = klass?.parent_gallery_enabled !== false;
+  const editingEnabled = klass?.parent_editing_enabled !== false;
   if (!albumTypeId) {
-    return NextResponse.json({ slots: [], assignments: {}, favorites: [], confirmedAt: null });
+    return NextResponse.json({ slots: [], assignments: {}, favorites: [], confirmedAt: null, galleryEnabled, editingEnabled });
   }
 
   const { data: slots } = await supabase
@@ -37,6 +41,17 @@ export async function GET() {
     .order("sort_order");
 
   const slotIds = (slots ?? []).map((s: any) => s.id);
+
+  if (!galleryEnabled) {
+    return NextResponse.json({
+      slots: slots ?? [],
+      assignments: {},
+      favorites: [],
+      confirmedAt: student.selection_confirmed_at,
+      galleryEnabled,
+      editingEnabled,
+    });
+  }
 
   const [{ data: assignedRows }, { data: favoriteRows }] = await Promise.all([
     slotIds.length
@@ -77,5 +92,7 @@ export async function GET() {
     assignments,
     favorites,
     confirmedAt: student.selection_confirmed_at,
+    galleryEnabled,
+    editingEnabled,
   });
 }

@@ -15,10 +15,14 @@ export async function POST() {
   const supabase = createSupabaseServiceRoleClient();
   const { data: student } = await supabase
     .from("students")
-    .select("id, first_name, last_name, classes(id, name, album_type_id)")
+    .select("id, first_name, last_name, classes(id, name, album_type_id, parent_editing_enabled, parent_gallery_enabled)")
     .eq("session_token", sessionToken)
     .single();
   if (!student) return NextResponse.json({ error: "Сесія недійсна" }, { status: 401 });
+  const lockedClass = (student as any).classes;
+  if (lockedClass?.parent_gallery_enabled === false || lockedClass?.parent_editing_enabled === false) {
+    return NextResponse.json({ error: "Вибір фото для альбому закритий" }, { status: 403 });
+  }
 
   const albumTypeId = (student as any).classes?.album_type_id;
   if (!albumTypeId) return NextResponse.json({ error: "Для класу не обрано тип альбому" }, { status: 400 });

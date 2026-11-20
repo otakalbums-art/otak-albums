@@ -15,6 +15,7 @@ export async function POST(req: Request) {
 
   const ctx = await classJpegsForSession(ids.map(String));
   if (!ctx) return NextResponse.json({ error: "Не авторизовано" }, { status: 401 });
+  if (ctx === "blocked") return NextResponse.json({ error: "Завантаження фото для класу закрите" }, { status: 403 });
 
   const paths = ctx.photos.map((p) => p.storage_path);
   const { data: signed } = paths.length

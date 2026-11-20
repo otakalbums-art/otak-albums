@@ -27,6 +27,7 @@ type CabinetData = {
   questions: Question[];
   photoSlots: { id: string; label: string }[];
   hasPhotos: boolean;
+  galleryEnabled: boolean;
   rows: Row[];
 };
 
@@ -277,7 +278,9 @@ export default function CabinetPage() {
 
           {data.photoSlots.length > 0 && (
             <div className="mt-4 border-t border-line pt-3.5">
-              {data.hasPhotos ? (
+              {!data.galleryEnabled ? (
+                <p className="text-xs text-ink-soft">Перегляд фото зараз закритий фотографом.</p>
+              ) : data.hasPhotos ? (
                 <a href="/album" className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-purple hover:underline">
                   <Images className="h-4 w-4" /> Обрати фото для альбому
                 </a>

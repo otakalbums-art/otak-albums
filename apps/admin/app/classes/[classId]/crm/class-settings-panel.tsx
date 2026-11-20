@@ -267,6 +267,9 @@ export function ClassSettingsPanel({ settings, albumTypes }: { settings: ClassSe
           <Toggle checked={editing} onChange={toggleEditing} disabled={busy !== null} aria-label="Дозволити редагування батькам" />
         </div>
         <p className="mt-2 text-[10.5px] text-ink-soft">
+          Закрито — батьки не можуть змінювати час, анкету й вибір фото для альбому. Окремо перегляд і завантаження
+          фото вмикаються на сторінці «Класи та групи».
+          <br />
           Кожна дитина має персональне посилання — кнопка «Посилання» біля імені в таблиці нижче.
           Воно діє, доки дитину не видалили з класу.
         </p>

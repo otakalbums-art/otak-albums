@@ -3,7 +3,7 @@ import { createSupabaseServerClient } from "@otak/supabase/server";
 import { CreateClassForm } from "./create-class-form";
 import { ReferralLinkCell } from "./referral-link-cell";
 import { Archive, Baby, ClipboardList, Images, Upload } from "lucide-react";
-import { ClassRowActions, ParentEditingToggle } from "./class-row-actions";
+import { ClassRowActions, ParentFlagToggle } from "./class-row-actions";
 
 /**
  * Список класів + створення нової "папки класу" (POST /api/classes) —
@@ -19,7 +19,7 @@ export default async function ClassesPage() {
   const supabase = createSupabaseServerClient();
   const { data: classes } = await supabase
     .from("classes")
-    .select("id, name, kind, referral_code, status, parent_editing_enabled, schools(name), photos(id)")
+    .select("id, name, kind, referral_code, status, parent_editing_enabled, parent_gallery_enabled, parent_download_enabled, schools(name), photos(id)")
     .order("created_at", { ascending: false });
 
   const { data: schools } = await supabase.from("schools").select("id, name").order("name");
@@ -102,7 +102,15 @@ function ClassesTable({ classes }: { classes: any[] }) {
             <th className="px-3 py-2">Фото</th>
             <th className="px-3 py-2">Реф. посилання</th>
             <th className="px-3 py-2">Статус</th>
-            <th className="px-3 py-2">Редагування батьками</th>
+            <th className="px-3 py-2" title="Час зйомки, анкета, вибір фото у місця альбому й «Підтвердити відбір»">
+              Редагування батьками
+            </th>
+            <th className="px-3 py-2" title="Галерея й «Обране» для батьків. Вимкнено — фото приховані, нічого не видаляється">
+              Перегляд фото
+            </th>
+            <th className="px-3 py-2" title="Кнопка ⤓ на фото й ZIP вибраних у галереї батьків">
+              Завантаження JPEG
+            </th>
             <th className="px-3 py-2"></th>
           </tr>
         </thead>
@@ -125,7 +133,19 @@ function ClassesTable({ classes }: { classes: any[] }) {
                 <StatusCell status={c.status} />
               </td>
               <td className="px-3 py-2.5">
-                {c.status !== "archived" && <ParentEditingToggle classId={c.id} enabled={c.parent_editing_enabled} />}
+                {c.status !== "archived" && (
+                  <ParentFlagToggle classId={c.id} flag="parentEditingEnabled" enabled={c.parent_editing_enabled} />
+                )}
+              </td>
+              <td className="px-3 py-2.5">
+                {c.status !== "archived" && (
+                  <ParentFlagToggle classId={c.id} flag="parentGalleryEnabled" enabled={c.parent_gallery_enabled} />
+                )}
+              </td>
+              <td className="px-3 py-2.5">
+                {c.status !== "archived" && (
+                  <ParentFlagToggle classId={c.id} flag="parentDownloadEnabled" enabled={c.parent_download_enabled} />
+                )}
               </td>
               <td className="px-3 py-2.5">
                 <div className="flex flex-wrap gap-1.5">
@@ -152,7 +172,7 @@ function ClassesTable({ classes }: { classes: any[] }) {
           ))}
           {classes.length === 0 && (
             <tr>
-              <td colSpan={6} className="px-3 py-4 text-ink-soft">
+              <td colSpan={8} className="px-3 py-4 text-ink-soft">
                 Активних класів і груп немає.
               </td>
             </tr>

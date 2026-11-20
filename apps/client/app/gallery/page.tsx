@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { downloadZip } from "client-zip";
 import { PhotoTile } from "@otak/ui";
 import { redirectToLogin } from "@/lib/session-redirect";
-import { CheckSquare, Download, Heart, X } from "lucide-react";
+import { CheckSquare, Download, EyeOff, Heart, X } from "lucide-react";
 
 type Photo = {
   id: string;
@@ -60,6 +60,8 @@ export default function GalleryPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [zip, setZip] = useState<{ done: number; total: number } | null>(null);
   const [zipError, setZipError] = useState<string | null>(null);
+  // Перемикачі адміна для класу: перегляд фото й завантаження JPEG.
+  const [access, setAccess] = useState({ gallery: true, download: true });
 
   function refetch() {
     return fetch("/api/photos")
@@ -90,6 +92,13 @@ export default function GalleryPage() {
           });
         });
         if (data.class) setClassInfo(data.class);
+        const next = { gallery: data.galleryEnabled !== false, download: data.downloadEnabled !== false };
+        setAccess((prev) => (prev.gallery === next.gallery && prev.download === next.download ? prev : next));
+        // Адмін щойно закрив завантаження — виходимо з режиму вибору.
+        if (!next.download) {
+          setSelecting(false);
+          setSelected(new Set());
+        }
         setIsLive(true);
       })
       .catch(() => {});
@@ -222,6 +231,7 @@ export default function GalleryPage() {
               </span>
             </button>
           </div>
+          {access.download && (
           <button
             onClick={() => (selecting ? stopSelecting() : setSelecting(true))}
             disabled={!photos.length}
@@ -232,6 +242,7 @@ export default function GalleryPage() {
             <CheckSquare className="h-3.5 w-3.5" />
             {selecting ? "Скасувати вибір" : "Вибрати для завантаження"}
           </button>
+          )}
         </div>
         <span
           className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11.5px] font-bold ${
@@ -261,21 +272,39 @@ export default function GalleryPage() {
             isSelected={selected.has(photo.id)}
             onToggleSelect={selecting ? () => toggleSelected(photo.id) : undefined}
             onOpen={() => (selecting ? toggleSelected(photo.id) : setOpenPhotoId(photo.id))}
-            downloadHref={selecting ? undefined : `/api/photos/${photo.id}/download`}
+            downloadHref={selecting || !access.download ? undefined : `/api/photos/${photo.id}/download`}
           />
         ))}
       </div>
 
-      {visible.length === 0 && (
+      {!access.gallery && (
+        <div className="mt-6 flex flex-col items-center gap-2 rounded-xl border border-line bg-card p-6 text-center">
+          <EyeOff className="h-6 w-6 text-ink-soft" />
+          <p className="text-sm font-semibold">Перегляд фото зараз закритий</p>
+          <p className="text-xs text-ink-soft">
+            Фотограф тимчасово приховав фото. Твоє «Обране» збережене — воно з'явиться, щойно перегляд відкриють.
+          </p>
+        </div>
+      )}
+
+      {access.gallery && visible.length === 0 && (
         <p className="mt-6 text-center text-sm text-ink-soft">
           {filter === "favorites" ? "Ще немає обраних фото." : "Фото ще не завантажені."}
         </p>
       )}
 
-      <p className="mt-4 text-xs text-ink-soft">
-        Показані лише файли формату <b>.jpeg</b>. Кнопка <Download className="inline h-3 w-3" /> на фото завантажує
-        його в оригінальній якості; щоб завантажити кілька — «Вибрати для завантаження».
-      </p>
+      {access.gallery && (
+        <p className="mt-4 text-xs text-ink-soft">
+          Показані лише файли формату <b>.jpeg</b>.
+          {access.download && (
+            <>
+              {" "}
+              Кнопка <Download className="inline h-3 w-3" /> на фото завантажує його в оригінальній якості; щоб
+              завантажити кілька — «Вибрати для завантаження».
+            </>
+          )}
+        </p>
+      )}
 
       {selecting && (
         <div className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-card/95 px-4 py-3 shadow-[0_-4px_16px_rgba(0,0,0,0.08)] backdrop-blur">
@@ -348,14 +377,16 @@ export default function GalleryPage() {
               <Heart className={`h-4 w-4 ${openPhoto.is_favorite ? "fill-white" : ""}`} />
               {openPhoto.is_favorite ? "В обраному" : "В обране"}
             </button>
-            <a
-              href={`/api/photos/${openPhoto.id}/download`}
-              download
-              className="inline-flex items-center gap-1.5 text-sm font-bold text-white/80 hover:text-white"
-            >
-              <Download className="h-4 w-4" />
-              Завантажити
-            </a>
+            {access.download && (
+              <a
+                href={`/api/photos/${openPhoto.id}/download`}
+                download
+                className="inline-flex items-center gap-1.5 text-sm font-bold text-white/80 hover:text-white"
+              >
+                <Download className="h-4 w-4" />
+                Завантажити
+              </a>
+            )}
           </div>
         </div>
       )}

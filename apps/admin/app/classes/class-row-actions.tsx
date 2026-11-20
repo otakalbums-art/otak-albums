@@ -9,30 +9,49 @@ const btn =
   "inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-line bg-page px-2.5 py-1.5 text-[11.5px] font-semibold transition-colors disabled:opacity-50";
 
 /** Перемикач "батьки можуть редагувати свої дані" для класу/групи. */
-export function ParentEditingToggle({ classId, enabled }: { classId: string; enabled: boolean }) {
+type ParentFlag = "parentEditingEnabled" | "parentGalleryEnabled" | "parentDownloadEnabled";
+
+const FLAG_INFO: Record<ParentFlag, { label: string; hint: string }> = {
+  parentEditingEnabled: {
+    label: "Редагування батьками",
+    hint: "Час зйомки, анкета, вибір фото у місця альбому й «Підтвердити відбір»",
+  },
+  parentGalleryEnabled: {
+    label: "Перегляд фото",
+    hint: "Галерея й «Обране» для батьків. Вимкнено — фото приховані, нічого не видаляється",
+  },
+  parentDownloadEnabled: {
+    label: "Завантаження JPEG",
+    hint: "Кнопка ⤓ на фото й ZIP вибраних у галереї батьків",
+  },
+};
+
+/** Перемикач доступу батьків для класу/групи (classes.parent_*_enabled). */
+export function ParentFlagToggle({ classId, flag, enabled }: { classId: string; flag: ParentFlag; enabled: boolean }) {
   const router = useRouter();
   const [value, setValue] = useState(enabled);
   const [busy, setBusy] = useState(false);
+  const info = FLAG_INFO[flag];
 
   async function change(next: boolean) {
     setValue(next);
     setBusy(true);
     const res = await fetch(`/api/classes/${classId}/settings`, {
       method: "PATCH",
-      body: JSON.stringify({ parentEditingEnabled: next }),
+      body: JSON.stringify({ [flag]: next }),
     });
     setBusy(false);
     if (!res.ok) {
       setValue(!next);
-      alert("Не вдалося змінити дозвіл на редагування");
+      alert(`Не вдалося змінити: ${info.label}`);
       return;
     }
     router.refresh();
   }
 
   return (
-    <span className="inline-flex items-center gap-1.5" title="Чи можуть батьки змінювати дані дитини за персональним посиланням">
-      <Toggle checked={value} onChange={change} disabled={busy} aria-label="Редагування батьками" />
+    <span className="inline-flex items-center gap-1.5" title={info.hint}>
+      <Toggle checked={value} onChange={change} disabled={busy} aria-label={info.label} />
       <span className="text-[10.5px] text-ink-soft">{value ? "Відкрито" : "Закрито"}</span>
     </span>
   );
