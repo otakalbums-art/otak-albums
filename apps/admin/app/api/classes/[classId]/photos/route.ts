@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServiceRoleClient } from "@otak/supabase/server";
 import { requireAdmin } from "@/lib/require-admin";
-import { signPhotoUrls } from "@otak/supabase/photo-variants";
+import { compareFilenames, signPhotoUrls } from "@otak/supabase/photo-variants";
 
 /**
  * GET /api/classes/[classId]/photos — усі фото класу для адмінки, і JPEG,
@@ -32,11 +32,14 @@ export async function GET(_req: Request, { params }: { params: { classId: string
     signPhotoUrls(service, paths, "original"),
   ]);
 
-  const mapped = (photos ?? []).map((p: any) => ({
-    ...p,
-    url: thumbByPath.get(p.storage_path) ?? null,
-    fullUrl: fullByPath.get(p.storage_path) ?? null,
-  }));
+  const mapped = (photos ?? [])
+    .map((p: any) => ({
+      ...p,
+      url: thumbByPath.get(p.storage_path) ?? null,
+      fullUrl: fullByPath.get(p.storage_path) ?? null,
+    }))
+    // За номером кадру — так само, як у галереї батьків.
+    .sort((a: any, b: any) => compareFilenames(a.filename, b.filename));
 
   return NextResponse.json({ photos: mapped });
 }

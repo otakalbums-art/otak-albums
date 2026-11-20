@@ -70,3 +70,19 @@ export async function signPhotoUrls(
   });
   return result;
 }
+
+const filenameCollator = new Intl.Collator("uk", { numeric: true, sensitivity: "base" });
+
+/**
+ * Порядок кадрів за номером у назві файлу (R6__0738.JPG < R6__0739.JPG <
+ * R6__1731.JPG): числа порівнюються як числа, а не як текст. Однакова
+ * назва — JPEG раніше за RAW.
+ */
+export function compareFilenames(a: string, b: string) {
+  const baseA = a.replace(/\.[^.]+$/, "");
+  const baseB = b.replace(/\.[^.]+$/, "");
+  const byBase = filenameCollator.compare(baseA, baseB);
+  if (byBase) return byBase;
+  const isJpeg = (n: string) => /\.jpe?g$/i.test(n);
+  return Number(isJpeg(b)) - Number(isJpeg(a)) || filenameCollator.compare(a, b);
+}
