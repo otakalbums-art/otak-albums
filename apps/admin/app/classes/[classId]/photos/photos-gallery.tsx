@@ -112,15 +112,17 @@ function ShotTile({
   shot: Shot;
   selecting: boolean;
   selected: boolean;
-  onToggle: () => void;
+  onToggle: (e: React.MouseEvent) => void;
   onDelete: () => void;
 }) {
   const hasPreview = !!shot.jpeg?.url;
   return (
     <div className={`overflow-hidden rounded-[11px] border bg-page ${selected ? "border-warn ring-2 ring-warn" : "border-line"}`}>
       <div
-        onClick={selecting ? onToggle : undefined}
-        className={`group relative aspect-[4/5] bg-gradient-to-br from-purple-pale to-purple-soft bg-cover bg-center ${
+        // Shift+клік працює й поза режимом вибору — одразу його вмикає.
+        onClick={(e) => (selecting || e.shiftKey ? onToggle(e) : undefined)}
+        onMouseDown={(e) => e.shiftKey && e.preventDefault() /* без виділення тексту при Shift+клік */}
+        className={`group relative aspect-[4/5] select-none bg-gradient-to-br from-purple-pale to-purple-soft bg-cover bg-center ${
           selecting ? "cursor-pointer" : ""
         }`}
         style={hasPreview ? { backgroundImage: `url(${shot.jpeg!.url})` } : undefined}
@@ -135,7 +137,10 @@ function ShotTile({
           </span>
         ) : (
           <button
-            onClick={onDelete}
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
             title="Видалити кадр (JPEG і RAW) назавжди"
             className="absolute right-[6px] top-[6px] flex h-[26px] w-[26px] items-center justify-center rounded-full bg-black/45 text-white opacity-0 transition-opacity hover:bg-warn focus:opacity-100 group-hover:opacity-100"
           >
@@ -211,6 +216,7 @@ export function PhotosGallery({ classId }: { classId: string }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
   const [notice, setNotice] = useState<{ type: "ok" | "error"; text: string } | null>(null);
+  const lastClicked = useRef<string | null>(null);
 
   /**
    * Нові/видалені фото без перезавантаження сторінки: Supabase Realtime на
@@ -286,18 +292,35 @@ export function PhotosGallery({ classId }: { classId: string }) {
     return { jpeg, raw, total: (photos ?? []).length };
   }, [photos]);
 
-  function toggleShot(key: string) {
+  /**
+   * Клік — вибрати/зняти одну плитку. Shift+клік — усі плитки між попереднім
+   * кліком і цим (у тому порядку, як показано), і вони отримують той самий
+   * стан, що й ця плитка після кліку — як у провіднику Windows / Finder.
+   */
+  function toggleShot(key: string, e: React.MouseEvent) {
+    if (!selecting) setSelecting(true);
+    const index = shots.findIndex((s) => s.key === key);
+    const anchor = lastClicked.current ? shots.findIndex((s) => s.key === lastClicked.current) : -1;
     setSelected((prev) => {
       const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
+      const select = !prev.has(key);
+      if (e.shiftKey && anchor >= 0 && index >= 0) {
+        const [from, to] = anchor < index ? [anchor, index] : [index, anchor];
+        for (const s of shots.slice(from, to + 1)) {
+          if (select) next.add(s.key);
+          else next.delete(s.key);
+        }
+      } else if (select) next.add(key);
+      else next.delete(key);
       return next;
     });
+    lastClicked.current = key;
   }
 
   function stopSelecting() {
     setSelecting(false);
     setSelected(new Set());
+    lastClicked.current = null;
   }
 
   async function deleteShots(targets: Shot[]) {
@@ -466,7 +489,8 @@ export function PhotosGallery({ classId }: { classId: string }) {
       </div>
       {selecting && (
         <p className="-mt-2 mb-3 text-[11px] text-ink-soft">
-          Клікайте по плитках, щоб вибрати. Кадр видаляється разом з усіма своїми файлами (JPEG і RAW). Фільтри категорій і
+          Клікайте по плитках, щоб вибрати. <b>Shift + клік</b> — вибрати все між попередньою плиткою і цією (так само
+          й зняти). Кадр видаляється разом з усіма своїми файлами (JPEG і RAW). Фільтри категорій і
           JPEG/RAW вище звужують те, що показано і що вибере «Вибрати всі показані».
         </p>
       )}
@@ -481,7 +505,7 @@ export function PhotosGallery({ classId }: { classId: string }) {
               shot={shot}
               selecting={selecting}
               selected={selected.has(shot.key)}
-              onToggle={() => toggleShot(shot.key)}
+              onToggle={(e) => toggleShot(shot.key, e)}
               onDelete={() => deleteShots([shot])}
             />
           ))}
