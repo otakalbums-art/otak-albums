@@ -2,14 +2,9 @@ import { NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { createSupabaseServiceRoleClient } from "@otak/supabase/server";
 import { requireAdmin } from "@/lib/require-admin";
-import { detectFileType, folderFor } from "@/lib/file-type";
+import { detectFileType, folderFor, frameKey } from "@/lib/file-type";
 
 const CATEGORIES = ["portrait", "group", "ceremony", "personal", "uncategorized"];
-
-/** "R6__0740.CR3" -> "r6__0740" — ключ пари JPEG+RAW одного кадру. */
-function frameKey(filename: string) {
-  return filename.replace(/\.[^.]+$/, "").toLowerCase();
-}
 
 /**
  * POST /api/photos/upload-urls — підписані посилання для прямого

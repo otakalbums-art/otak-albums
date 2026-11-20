@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { PhotoPicker } from "./photo-picker";
 import { DualScroll } from "@otak/ui";
 import { LinksMessage } from "./links-message";
+import { AlbumPhotosDownload } from "./album-photos-download";
 import { Camera, Check, Clock, FileText, Gift, Link2, Plus, ShoppingBag, X } from "lucide-react";
 import { createSupabaseBrowserClient } from "@otak/supabase/browser";
 import { classChannel, groupForTime, type Question, type TimeGroup } from "@otak/supabase/cabinet";
@@ -20,7 +21,8 @@ type Slot = {
   sort_order: number;
 };
 
-type PhotoValue = { kind: "photo"; photos: { id: string; filename: string; url: string | null }[] };
+type SlotPhoto = { id: string; filename: string; url: string | null; rawId?: string | null; rawFilename?: string | null };
+type PhotoValue = { kind: "photo"; photos: SlotPhoto[] };
 type TextValue = { kind: "text"; answer: string };
 
 type OrderStatus = "not_ordered" | "ordered" | "partially_paid" | "paid" | "free";
@@ -151,33 +153,63 @@ function PhotoCell({
   photos,
   onEdit,
 }: {
-  photos: { id: string; filename: string; url: string | null }[];
+  photos: SlotPhoto[];
   onEdit: () => void;
 }) {
+  if (photos.length === 0) {
+    return (
+      <button onClick={onEdit} className="text-[13px] text-ink-soft hover:text-purple">
+        -
+      </button>
+    );
+  }
+  const link = "rounded px-1 py-px text-[8.5px] font-bold leading-tight";
   return (
-    <button onClick={onEdit} className="flex items-start gap-1.5 text-left">
-      {photos.length === 0 ? (
-        <span className="text-[13px] text-ink-soft hover:text-purple">-</span>
-      ) : (
-        <span className="flex gap-1.5">
-          {photos.slice(0, 4).map((p) => (
-            <span key={p.id} className="flex w-[64px] flex-col items-center gap-0.5">
-              <span
-                className="h-[38px] w-[30px] flex-shrink-0 rounded-[5px] border border-line bg-cover bg-center"
-                style={p.url ? { backgroundImage: `url(${p.url})` } : undefined}
-              />
-              <span
-                className="w-full whitespace-normal break-all text-center font-mono text-[8.5px] leading-tight text-ink-soft"
-                title={p.filename}
+    <span className="flex items-start gap-1.5">
+      {photos.slice(0, 4).map((p) => (
+        <span key={p.id} className="flex w-[64px] flex-col items-center gap-0.5">
+          <button
+            onClick={onEdit}
+            title="Змінити вибір"
+            className="h-[38px] w-[30px] flex-shrink-0 rounded-[5px] border border-line bg-cover bg-center hover:border-purple"
+            style={p.url ? { backgroundImage: `url(${p.url})` } : undefined}
+          />
+          <span
+            className="w-full whitespace-normal break-all text-center font-mono text-[8.5px] leading-tight text-ink-soft"
+            title={p.filename}
+          >
+            {p.filename}
+          </span>
+          <span className="flex gap-0.5">
+            <a
+              href={`/api/photos/${p.id}/download`}
+              title={`Завантажити ${p.filename}`}
+              className={`${link} bg-purple-pale text-purple-deep hover:bg-purple hover:text-white`}
+            >
+              JPEG
+            </a>
+            {p.rawId ? (
+              <a
+                href={`/api/photos/${p.rawId}/download`}
+                title={`Завантажити ${p.rawFilename}`}
+                className={`${link} bg-[#E7F7EE] text-ok hover:bg-ok hover:text-white`}
               >
-                {p.filename}
+                RAW
+              </a>
+            ) : (
+              <span title="RAW цього кадру ще не завантажено на платформу" className={`${link} bg-line text-ink-soft/60 line-through`}>
+                RAW
               </span>
-            </span>
-          ))}
-          {photos.length > 4 && <span className="self-center text-[10px] text-ink-soft">+{photos.length - 4}</span>}
+            )}
+          </span>
         </span>
+      ))}
+      {photos.length > 4 && (
+        <button onClick={onEdit} className="self-center text-[10px] text-ink-soft hover:text-purple">
+          +{photos.length - 4}
+        </button>
       )}
-    </button>
+    </span>
   );
 }
 
@@ -646,6 +678,7 @@ export function CrmGrid({ classId, title, shootDate }: { classId: string; title:
   return (
     <div>
       <LinksMessage students={students} timeGroups={timeGroups} title={title} shootDate={shootDate} />
+      {slots.some((s) => s.kind === "photo") && <AlbumPhotosDownload classId={classId} />}
       <DualScroll>
       <table className="min-w-max border-collapse text-[13px]">
         <thead>

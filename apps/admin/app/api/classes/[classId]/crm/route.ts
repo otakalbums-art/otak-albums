@@ -3,6 +3,8 @@ import { createSupabaseServiceRoleClient } from "@otak/supabase/server";
 import { requireAdmin } from "@/lib/require-admin";
 import { signPhotoUrls } from "@otak/supabase/photo-variants";
 import { parseQuestions, parseTimeGroups } from "@otak/supabase/cabinet";
+import { frameKey } from "@/lib/file-type";
+import { rawTwinsForClass } from "@/lib/raw-twins";
 
 /**
  * GET /api/classes/[classId]/crm — CRM-таблиця класу: слоти типу альбому
@@ -99,7 +101,11 @@ export async function GET(_req: Request, { params }: { params: { classId: string
   // /api/classes/[classId]/photos.
   const paths = (slotPhotos ?? []).map((sp: any) => sp.photos?.storage_path).filter(Boolean);
   // Мініатюри (~480 px) замість оригіналів — packages/supabase/src/photo-variants.ts.
-  const urlByPath = await signPhotoUrls(service, paths, "thumb");
+  const [urlByPath, rawByKey] = await Promise.all([
+    signPhotoUrls(service, paths, "thumb"),
+    // RAW-пара кожного обраного JPEG — щоб завантажити його прямо з CRM.
+    paths.length ? rawTwinsForClass(service, params.classId) : Promise.resolve(new Map()),
+  ]);
 
   const valuesByStudent = new Map<string, Record<string, any>>();
   for (const student of students ?? []) {
@@ -110,10 +116,13 @@ export async function GET(_req: Request, { params }: { params: { classId: string
     const bucket = valuesByStudent.get(sp.student_id);
     if (!bucket || !sp.photos) continue;
     const entry = bucket[sp.slot_id] ?? { kind: "photo", photos: [] };
+    const raw = rawByKey.get(frameKey(sp.photos.filename));
     entry.photos.push({
       id: sp.photos.id,
       filename: sp.photos.filename,
       url: urlByPath.get(sp.photos.storage_path) ?? null,
+      rawId: raw?.id ?? null,
+      rawFilename: raw?.filename ?? null,
     });
     bucket[sp.slot_id] = entry;
   }

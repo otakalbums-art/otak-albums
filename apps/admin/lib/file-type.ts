@@ -55,3 +55,8 @@ export function fileKindOf(fileType: string): FileKind {
 export function folderFor(fileType: string): string {
   return FOLDER_BY_KIND[fileKindOf(fileType)];
 }
+
+/** "R6__0740.CR3" -> "r6__0740" — ключ пари JPEG+RAW одного кадру. */
+export function frameKey(filename: string) {
+  return filename.replace(/\.[^.]+$/, "").toLowerCase();
+}
