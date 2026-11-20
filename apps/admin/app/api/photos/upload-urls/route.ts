@@ -2,9 +2,9 @@ import { NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { createSupabaseServiceRoleClient } from "@otak/supabase/server";
 import { requireAdmin } from "@/lib/require-admin";
+import { loadPhotoCategories } from "@otak/supabase/photo-categories";
 import { detectFileType, folderFor, frameKey } from "@/lib/file-type";
 
-const CATEGORIES = ["portrait", "group", "ceremony", "personal", "uncategorized"];
 
 /**
  * POST /api/photos/upload-urls — підписані посилання для прямого
@@ -27,12 +27,12 @@ export async function POST(req: Request) {
   if (!classId || !Array.isArray(files) || !files.length) {
     return NextResponse.json({ error: "Немає файлів" }, { status: 400 });
   }
-  if (!CATEGORIES.includes(category)) return NextResponse.json({ error: "Невірна категорія" }, { status: 400 });
+  const service = createSupabaseServiceRoleClient();
+  const categoryKeys = (await loadPhotoCategories(service)).map((c) => c.key);
+  if (!categoryKeys.includes(category)) return NextResponse.json({ error: "Невірна категорія" }, { status: 400 });
   if (category === "personal" && !studentId) {
     return NextResponse.json({ error: "Для персональної категорії потрібен учень" }, { status: 400 });
   }
-
-  const service = createSupabaseServiceRoleClient();
 
   // Усі файли класу: які назви вже є, і де лежить "пара" кожного кадру —
   // RAW стає поруч зі своїм JPEG, а дозавантажений JPEG — поруч зі своїм RAW.

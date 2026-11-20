@@ -2,7 +2,7 @@ import { Card, StatusChip } from "@otak/ui";
 import { createSupabaseServerClient } from "@otak/supabase/server";
 import { CreateClassForm } from "./create-class-form";
 import { ReferralLinkCell } from "./referral-link-cell";
-import { Archive, Baby, ClipboardList, Images, Upload } from "lucide-react";
+import { Archive, Baby, ClipboardList, Images, Upload, Tags } from "lucide-react";
 import { ClassRowActions, ParentFlagToggle } from "./class-row-actions";
 
 /**
@@ -38,6 +38,12 @@ export default async function ClassesPage() {
         title={
           <div className="flex w-full items-center justify-between">
             <span>Класи та групи садочка</span>
+            <a
+              href="/classes/categories"
+              className="inline-flex items-center gap-1.5 rounded-[9px] border-[1.5px] border-line bg-card px-3 py-1.5 text-[12px] font-bold text-ink hover:border-purple-soft"
+            >
+              <Tags className="h-3.5 w-3.5" /> Категорії фото
+            </a>
           </div>
         }
         menu={false}

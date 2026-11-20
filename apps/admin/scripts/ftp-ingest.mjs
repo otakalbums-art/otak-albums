@@ -128,8 +128,18 @@ const PASV_MAX = Number(process.env.FTP_PASV_MAX || 2130);
 
 const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 
-// Мають збігатися з check-constraint `photos.category` у supabase/migrations/0001_init.sql.
-export const CATEGORIES = ["portrait", "group", "ceremony", "personal", "uncategorized"];
+// Категорії (= папки для камер) керуються з адмінки — таблиця photo_categories
+// (supabase/migrations/0018_photo_categories.sql). Кеш на хвилину; якщо таблиця
+// недоступна — вбудований список.
+export const DEFAULT_CATEGORIES = ["portrait", "group", "ceremony", "personal", "uncategorized"];
+let categoryCache = { keys: DEFAULT_CATEGORIES, at: 0 };
+async function categoryKeys() {
+  if (Date.now() - categoryCache.at < 60_000) return categoryCache.keys;
+  const { data, error } = await supabase.from("photo_categories").select("key");
+  if (!error && data?.length) categoryCache = { keys: data.map((c) => c.key), at: Date.now() };
+  else categoryCache = { ...categoryCache, at: Date.now() };
+  return categoryCache.keys;
+}
 
 // Той самий список, що й у apps/admin/lib/file-type.ts (тут продубльовано —
 // цей файл окремий Node-процес, не проходить через збірку Next.js, тому
@@ -257,7 +267,7 @@ ftpServer.on("login", async ({ username, password, connection }, resolve, reject
   fs.mkdirSync(root, { recursive: true });
   // Наперед створюємо підпапки-категорії, щоб камера могла в них CWD/STOR,
   // навіть якщо сама MKD не вміє/не робить.
-  for (const category of CATEGORIES) {
+  for (const category of await categoryKeys()) {
     fs.mkdirSync(path.join(root, category), { recursive: true });
   }
   log(`[ftp] ✓ підключення від камери, клас ${match.id}`);
@@ -362,7 +372,7 @@ async function ingest(filePath) {
   // segments = [classId, ...можлива категорія-підпапка..., filename]
   // Камера без вказаної Directory пише прямо в корінь -> segments.length === 2.
   const maybeCategory = segments.length >= 3 ? segments[1] : null;
-  let category = CATEGORIES.includes(maybeCategory) ? maybeCategory : "uncategorized";
+  let category = (await categoryKeys()).includes(maybeCategory) ? maybeCategory : "uncategorized";
 
   try {
     const { data: klass } = await supabase.from("classes").select("id").eq("id", classId).maybeSingle();

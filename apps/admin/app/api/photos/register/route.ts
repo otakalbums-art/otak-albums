@@ -2,10 +2,10 @@ import { NextResponse } from "next/server";
 import { createSupabaseServiceRoleClient } from "@otak/supabase/server";
 import { variantPath } from "@otak/supabase/photo-variants";
 import { requireAdmin } from "@/lib/require-admin";
+import { loadPhotoCategories } from "@otak/supabase/photo-categories";
 import { detectFileType } from "@/lib/file-type";
 import { uploadVariants } from "@/lib/photo-variants-gen";
 
-const CATEGORIES = ["portrait", "group", "ceremony", "personal", "uncategorized"];
 
 /**
  * POST /api/photos/register — файл уже лежить у Storage (браузер завантажив
@@ -22,15 +22,15 @@ export async function POST(req: Request) {
 
   const { classId, path, filename, category, studentId } = await req.json();
   const fileType = detectFileType(filename ?? "");
-  if (!classId || !path || !fileType || !CATEGORIES.includes(category)) {
+  const service = createSupabaseServiceRoleClient();
+  const categoryKeys = (await loadPhotoCategories(service)).map((c) => c.key);
+  if (!classId || !path || !fileType || !categoryKeys.includes(category)) {
     return NextResponse.json({ error: "Невірний запит" }, { status: 400 });
   }
   // Шлях має належати саме цьому класу й категорії (його видав upload-urls).
   if (!path.startsWith(`${classId}/${category}/`)) {
     return NextResponse.json({ error: "Невірний шлях файлу" }, { status: 400 });
   }
-
-  const service = createSupabaseServiceRoleClient();
 
   if (fileType === "jpeg") {
     const { data: blob, error } = await service.storage.from("photos").download(path);

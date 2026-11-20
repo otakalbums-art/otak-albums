@@ -1,6 +1,7 @@
 import { createSupabaseServiceRoleClient } from "@otak/supabase";
 import { PhotoTile } from "@otak/ui";
 import { notFound } from "next/navigation";
+import { hiddenCategoryKeys, inList } from "@otak/supabase/photo-categories";
 
 // Ця сторінка не викликає cookies()/headers() ніде (сервісний ключ, не
 // студентська сесія), тож без цього Next.js вважав би її статичною —
@@ -47,12 +48,14 @@ export default async function MomLinkPage({ params }: { params: { token: string 
     );
   }
 
-  const { data: photos } = await supabase
+  const hidden = await hiddenCategoryKeys(supabase);
+  let photosQuery = supabase
     .from("photos")
     .select("id, filename, storage_path")
     .eq("class_id", link.class_id)
-    .eq("file_type", "jpeg")
-    .order("uploaded_at", { ascending: false });
+    .eq("file_type", "jpeg");
+  if (hidden.length) photosQuery = photosQuery.not("category", "in", inList(hidden));
+  const { data: photos } = await photosQuery.order("uploaded_at", { ascending: false });
 
   const paths = (photos ?? []).map((p: any) => p.storage_path);
   const { data: signedUrls } = paths.length

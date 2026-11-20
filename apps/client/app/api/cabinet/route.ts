@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createSupabaseServiceRoleClient } from "@otak/supabase";
 import { allSlots, broadcastClassChange, hhmm, parseQuestions, parseTimeGroups } from "@otak/supabase/cabinet";
+import { hiddenCategoryKeys, inList } from "@otak/supabase/photo-categories";
 
 /**
  * Особистий кабінет дитини (батьків) — supabase/migrations/0013_parent_cabinet.sql.
@@ -39,6 +40,14 @@ export async function GET() {
   const timeGroups = parseTimeGroups(klass.time_groups);
   const slots = allSlots(timeGroups);
 
+  const hidden = await hiddenCategoryKeys(supabase);
+  let photoCountQuery = supabase
+    .from("photos")
+    .select("id", { count: "exact", head: true })
+    .eq("class_id", klass.id)
+    .eq("file_type", "jpeg");
+  if (hidden.length) photoCountQuery = photoCountQuery.not("category", "in", inList(hidden));
+
   const [{ data: students }, { data: photoSlots }, { count: photoCount }] = await Promise.all([
     supabase
       .from("students")
@@ -56,7 +65,7 @@ export async function GET() {
           .eq("kind", "photo")
           .order("sort_order")
       : Promise.resolve({ data: [] as { id: string; label: string }[] }),
-    supabase.from("photos").select("id", { count: "exact", head: true }).eq("class_id", klass.id).eq("file_type", "jpeg"),
+    photoCountQuery,
   ]);
 
   const ids = (students ?? []).map((s) => s.id);

@@ -1,6 +1,8 @@
 import { createSupabaseServerClient } from "@otak/supabase/server";
 import { ftpCredentialsForClass } from "@/lib/ftp-credentials";
 import { FtpControlPanel } from "./ftp-control-panel";
+import { createSupabaseServiceRoleClient } from "@otak/supabase/server";
+import { loadPhotoCategories } from "@otak/supabase/photo-categories";
 
 /**
  * Прийом фото з Wi-Fi камер по FTP — дружній UI: перемикач старт/стоп
@@ -28,5 +30,7 @@ export default async function FtpImportPage() {
     classOptions.map((c) => [c.id, ftpCredentialsForClass(c.id)])
   );
 
-  return <FtpControlPanel classes={classOptions} credentialsByClassId={credentialsByClassId} />;
+  const categories = (await loadPhotoCategories(createSupabaseServiceRoleClient())).map((c) => ({ key: c.key, label: c.label }));
+
+  return <FtpControlPanel classes={classOptions} credentialsByClassId={credentialsByClassId} categories={categories} />;
 }

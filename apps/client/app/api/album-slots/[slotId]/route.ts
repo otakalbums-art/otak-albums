@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createSupabaseServiceRoleClient } from "@otak/supabase";
+import { hiddenCategoryKeys, inList } from "@otak/supabase/photo-categories";
 
 /**
  * PUT /api/album-slots/[slotId] — учень призначає слоту фото свого класу
@@ -45,12 +46,15 @@ export async function PUT(req: Request, { params }: { params: { slotId: string }
 
   // Обирати можна будь-яке JPEG-фото свого класу — з обраного чи із загальної галереї.
   if (photoIds.length > 0) {
-    const { data: own } = await supabase
+    const hidden = await hiddenCategoryKeys(supabase);
+    let ownQuery = supabase
       .from("photos")
       .select("id")
       .eq("class_id", (student as any).class_id)
       .eq("file_type", "jpeg")
       .in("id", photoIds);
+    if (hidden.length) ownQuery = ownQuery.not("category", "in", inList(hidden));
+    const { data: own } = await ownQuery;
     if ((own ?? []).length !== new Set(photoIds).size) {
       return NextResponse.json({ error: "Можна обирати лише фото свого класу" }, { status: 400 });
     }

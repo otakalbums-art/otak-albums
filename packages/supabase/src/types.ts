@@ -47,7 +47,7 @@ type PhotoFileType =
   | "srw"
   | "x3f"
   | "dng";
-type PhotoCategory = "portrait" | "group" | "ceremony" | "personal" | "uncategorized";
+type PhotoCategory = string; // ключ із photo_categories (0018)
 type PhotoFileKind = "jpeg" | "raw";
 type OrderStatus = "not_ordered" | "ordered" | "partially_paid" | "paid" | "free";
 type SlotKind = "photo" | "text";
@@ -111,6 +111,12 @@ export type Database = {
         Row: { id: string; category: string | null; name: string; price: number | null; sort_order: number; created_at: string };
         Insert: { id?: string; category?: string | null; name: string; price?: number | null; sort_order?: number; created_at?: string };
         Update: { id?: string; category?: string | null; name?: string; price?: number | null; sort_order?: number; created_at?: string };
+        Relationships: [];
+      };
+      photo_categories: {
+        Row: { key: string; label: string; sort_order: number; hidden_from_parents: boolean; is_system: boolean; created_at: string };
+        Insert: { key: string; label: string; sort_order?: number; hidden_from_parents?: boolean; is_system?: boolean; created_at?: string };
+        Update: { key?: string; label?: string; sort_order?: number; hidden_from_parents?: boolean; is_system?: boolean; created_at?: string };
         Relationships: [];
       };
       album_small_run_markups: {

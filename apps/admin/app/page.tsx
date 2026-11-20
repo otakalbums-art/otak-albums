@@ -1,17 +1,12 @@
 import { Card, Donut, StatusChip } from "@otak/ui";
 import { createSupabaseServerClient } from "@otak/supabase/server";
 import { ftpStatus } from "@/lib/ftp-process-manager";
+import { createSupabaseServiceRoleClient } from "@otak/supabase/server";
+import { loadPhotoCategories } from "@otak/supabase/photo-categories";
 import { Mail, Radio } from "lucide-react";
 
 const PALETTE = ["#460464", "#8C57A8", "#C6A3D6", "#1FAA59", "#E14F4F", "#8A8E98"];
 
-const CATEGORY_LABELS: Record<string, string> = {
-  portrait: "Портрети",
-  group: "Групові",
-  ceremony: "Церемонія",
-  personal: "Персональні",
-  uncategorized: "Без категорії",
-};
 
 const ORDER_STATUS_LABEL: Record<string, string> = {
   not_ordered: "Не замовили",
@@ -94,6 +89,9 @@ export default async function DashboardPage() {
   const profit = paidRevenue - paidCost;
 
   const { data: photoRows } = await supabase.from("photos").select("category");
+  const CATEGORY_LABELS = Object.fromEntries(
+    (await loadPhotoCategories(createSupabaseServiceRoleClient())).map((c) => [c.key, c.label])
+  );
   const categoryCounts = (photoRows ?? []).reduce((acc: Record<string, number>, p: any) => {
     acc[p.category] = (acc[p.category] ?? 0) + 1;
     return acc;

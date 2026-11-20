@@ -2,6 +2,8 @@ import { createSupabaseServerClient } from "@otak/supabase";
 import { Card } from "@otak/ui";
 import { notFound } from "next/navigation";
 import { PhotosGallery } from "./photos-gallery";
+import { createSupabaseServiceRoleClient } from "@otak/supabase/server";
+import { loadPhotoCategories } from "@otak/supabase/photo-categories";
 
 /**
  * Галерея фото класу для адмінки — на відміну від учнівської
@@ -20,7 +22,10 @@ export default async function ClassPhotosPage({ params }: { params: { classId: s
 
   return (
     <Card title={`Фото — ${klass.name}, ${(klass as any).schools?.name ?? ""}`} menu={false}>
-      <PhotosGallery classId={klass.id} />
+      <PhotosGallery
+        classId={klass.id}
+        categories={(await loadPhotoCategories(createSupabaseServiceRoleClient())).map((c) => ({ key: c.key, label: c.label }))}
+      />
     </Card>
   );
 }

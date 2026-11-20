@@ -2,65 +2,19 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Card, Toggle } from "@otak/ui";
-import { AlertTriangle, Camera, Check, Copy, Loader2, Pencil } from "lucide-react";
+import { AlertTriangle, Camera, Check, Copy, Loader2 } from "lucide-react";
 import { CategoryIcon } from "@/lib/photo-categories";
 
 type ClassOption = { id: string; name: string; schoolName: string };
 type Creds = { username: string; password: string };
 
-const CATEGORY_SLOTS: { key: string; label: string }[] = [
-  { key: "portrait", label: "Портрети" },
-  { key: "group", label: "Групові" },
-  { key: "ceremony", label: "Церемонія" },
-  { key: "personal", label: "Персональні" },
-  { key: "uncategorized", label: "Без категорії" },
-];
-
-const LABELS_STORAGE_KEY = "otak-ftp-category-labels";
-
-/** Іконка + назва картки з олівцем — клік перемикає в режим редагування, Enter/blur зберігає. */
-function EditableTitle({ category, value, onChange }: { category: string; value: string; onChange: (next: string) => void }) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(value);
-
-  useEffect(() => {
-    if (!editing) setDraft(value);
-  }, [value, editing]);
-
-  function save() {
-    const next = draft.trim();
-    if (next) onChange(next);
-    setEditing(false);
-  }
-
-  if (editing) {
-    return (
-      <span className="flex items-center gap-1.5">
-        <CategoryIcon category={category} className="h-4 w-4 text-purple" />
-        <input
-          autoFocus
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onBlur={save}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") save();
-            if (e.key === "Escape") {
-              setDraft(value);
-              setEditing(false);
-            }
-          }}
-          className="w-[140px] rounded-md border border-purple bg-white px-1.5 py-0.5 text-[13.5px] font-bold outline-none"
-        />
-      </span>
-    );
-  }
-
+/** Іконка + назва категорії (перейменування — на сторінці «Класи та групи» → «Категорії фото»). */
+function SlotTitle({ category, label }: { category: string; label: string }) {
   return (
-    <button onClick={() => setEditing(true)} className="flex items-center gap-1.5 hover:text-purple">
+    <span className="flex items-center gap-1.5">
       <CategoryIcon category={category} className="h-4 w-4 text-purple" />
-      <span>{value}</span>
-      <Pencil className="h-3 w-3 text-ink-soft" />
-    </button>
+      <span>{label}</span>
+    </span>
   );
 }
 
@@ -93,9 +47,12 @@ function CopyField({ label, value }: { label: string; value: string }) {
 export function FtpControlPanel({
   classes,
   credentialsByClassId,
+  categories,
 }: {
   classes: ClassOption[];
   credentialsByClassId: Record<string, Creds>;
+  // Категорії з адмінки «Категорії фото» (photo_categories), у їхньому порядку — по одній на камеру.
+  categories: { key: string; label: string }[];
 }) {
   // --- статус приймача (poll кожні 3с) ---
   const [status, setStatus] = useState<{
@@ -129,30 +86,6 @@ export function FtpControlPanel({
     if (data?.ok === false && data.error) setToggleError(data.error);
     await refreshStatus();
     setBusy(false);
-  }
-
-  // --- перейменування карток категорій (зберігається в браузері) ---
-  const [labels, setLabels] = useState<Record<string, string>>(
-    Object.fromEntries(CATEGORY_SLOTS.map((s) => [s.key, s.label]))
-  );
-
-  useEffect(() => {
-    const saved = localStorage.getItem(LABELS_STORAGE_KEY);
-    if (saved) {
-      try {
-        setLabels((prev) => ({ ...prev, ...JSON.parse(saved) }));
-      } catch {
-        // ігноруємо биті дані в localStorage
-      }
-    }
-  }, []);
-
-  function renameCategory(key: string, next: string) {
-    setLabels((prev) => {
-      const updated = { ...prev, [key]: next };
-      localStorage.setItem(LABELS_STORAGE_KEY, JSON.stringify(updated));
-      return updated;
-    });
   }
 
   // --- вибір класу + кількість камер (запам'ятовуємо в браузері) ---
@@ -206,7 +139,7 @@ export function FtpControlPanel({
 
   const creds = selectedClassId ? credentialsByClassId[selectedClassId] : null;
   const primaryIp = status?.ips[0]?.address;
-  const visibleSlots = useMemo(() => CATEGORY_SLOTS.slice(0, cameraCount), [cameraCount]);
+  const visibleSlots = useMemo(() => categories.slice(0, cameraCount), [categories, cameraCount]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -347,13 +280,7 @@ export function FtpControlPanel({
                 {visibleSlots.map((slot) => (
                   <Card
                     key={slot.key}
-                    title={
-                      <EditableTitle
-                        category={slot.key}
-                        value={labels[slot.key] ?? slot.label}
-                        onChange={(next) => renameCategory(slot.key, next)}
-                      />
-                    }
+                    title={<SlotTitle category={slot.key} label={slot.label} />}
                     menu={false}
                   >
                     <div className="flex flex-col gap-2.5">

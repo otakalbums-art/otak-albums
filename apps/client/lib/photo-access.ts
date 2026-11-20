@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { createSupabaseServiceRoleClient } from "@otak/supabase";
+import { hiddenCategoryKeys, inList } from "@otak/supabase/photo-categories";
 
 /**
  * Оригінали JPEG класу поточного учня (otak_session -> students.session_token).
@@ -20,14 +21,17 @@ export async function classJpegsForSession(ids: string[]) {
   if (!student || !klass || klass.status === "archived") return null;
   if (!klass.parent_gallery_enabled || !klass.parent_download_enabled) return "blocked" as const;
 
+  const hidden = await hiddenCategoryKeys(supabase);
   const photos: { id: string; filename: string; storage_path: string }[] = [];
   for (let i = 0; i < ids.length; i += 200) {
-    const { data } = await supabase
+    let query = supabase
       .from("photos")
       .select("id, filename, storage_path")
       .eq("class_id", student.class_id)
       .eq("file_type", "jpeg")
       .in("id", ids.slice(i, i + 200));
+    if (hidden.length) query = query.not("category", "in", inList(hidden));
+    const { data } = await query;
     photos.push(...(data ?? []));
   }
   return { supabase, photos };

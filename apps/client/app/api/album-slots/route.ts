@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createSupabaseServiceRoleClient } from "@otak/supabase";
 import { signPhotoUrls } from "@otak/supabase/photo-variants";
+import { hiddenCategoryKeys, inList } from "@otak/supabase/photo-categories";
 
 /**
  * GET /api/album-slots — фото-слоти (kind='photo') типу альбому класу
@@ -57,15 +58,21 @@ export async function GET() {
     slotIds.length
       ? supabase
           .from("student_slot_photos")
-          .select("slot_id, photos(id, filename, storage_path)")
+          .select("slot_id, photos(id, filename, storage_path, category)")
           .eq("student_id", student.id)
           .in("slot_id", slotIds)
       : Promise.resolve({ data: [] as any[] }),
     supabase
       .from("favorites")
-      .select("photos(id, filename, storage_path)")
+      .select("photos(id, filename, storage_path, category)")
       .eq("student_id", student.id),
   ]);
+
+  // Фото з прихованих від батьків категорій не показуємо (у базі вибір лишається).
+  const hidden = new Set(await hiddenCategoryKeys(supabase));
+  for (const rows of [assignedRows, favoriteRows]) {
+    for (const r of (rows ?? []) as any[]) if (r.photos && hidden.has(r.photos.category)) r.photos = null;
+  }
 
   // Signed URLs одним батчем для всіх задіяних фото (призначені + обрані).
   const paths = new Set<string>();

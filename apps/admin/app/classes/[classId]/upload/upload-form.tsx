@@ -6,13 +6,6 @@ import { createSupabaseBrowserClient } from "@otak/supabase/browser";
 
 type Student = { id: string; first_name: string; last_name: string };
 
-const CATEGORIES: { value: string; label: string }[] = [
-  { value: "portrait", label: "Портрети" },
-  { value: "group", label: "Групові" },
-  { value: "ceremony", label: "Церемонія" },
-  { value: "personal", label: "Персональна (для одного учня)" },
-  { value: "uncategorized", label: "Без категорії" },
-];
 
 type Prepared = {
   name: string;
@@ -44,7 +37,16 @@ const PARALLEL = 3; // скільки файлів вантажимо одноч
  * розмір запиту — тож і RAW по ~20 МБ, і сотні файлів за раз. RAW сам стає
  * в пару до свого JPEG за назвою файлу (R6__0740.CR3 ↔ R6__0740.JPG).
  */
-export function UploadForm({ classId, students }: { classId: string; students: Student[] }) {
+export function UploadForm({
+  classId,
+  students,
+  categories,
+}: {
+  classId: string;
+  students: Student[];
+  // Категорії з адмінки «Категорії фото» (photo_categories), у їхньому порядку.
+  categories: { value: string; label: string }[];
+}) {
   const [category, setCategory] = useState("uncategorized");
   const [studentId, setStudentId] = useState("");
   // Лише файли, яких на платформі ще немає (для дозавантаження загублених кадрів).
@@ -161,7 +163,7 @@ export function UploadForm({ classId, students }: { classId: string; students: S
             onChange={(e) => setCategory(e.target.value)}
             className="w-full rounded-[9px] border border-line px-3 py-2 text-sm outline-none focus:border-purple"
           >
-            {CATEGORIES.map((c) => (
+            {categories.map((c) => (
               <option key={c.value} value={c.value}>
                 {c.label}
               </option>

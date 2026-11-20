@@ -19,17 +19,6 @@ type Photo = {
   fullUrl: string | null; // оригінал — для "відкрити"
 };
 
-// Ті самі категорії й підписи, що й на /ftp-import (apps/admin/app/ftp-import/ftp-control-panel.tsx)
-// і в формі ручного завантаження (upload-form.tsx) — дублюємо тут навмисно,
-// це прості довідники, окремий спільний модуль для трьох рядків не виправданий.
-const CATEGORY_LABELS: Record<string, string> = {
-  portrait: "Портрети",
-  group: "Групові",
-  ceremony: "Церемонія",
-  personal: "Персональні",
-  uncategorized: "Без категорії",
-};
-const CATEGORY_ORDER = ["portrait", "group", "ceremony", "personal", "uncategorized"];
 
 /** Ім'я файлу без розширення й у нижньому регістрі — ключ для парування JPEG+RAW одного кадру. */
 function baseName(filename: string) {
@@ -189,7 +178,16 @@ function ShotTile({
   );
 }
 
-export function PhotosGallery({ classId }: { classId: string }) {
+export function PhotosGallery({
+  classId,
+  categories,
+}: {
+  classId: string;
+  // Категорії з адмінки «Категорії фото» (photo_categories), у їхньому порядку.
+  categories: { key: string; label: string }[];
+}) {
+  const CATEGORY_LABELS = Object.fromEntries(categories.map((c) => [c.key, c.label]));
+  const CATEGORY_ORDER = categories.map((c) => c.key);
   const [photos, setPhotos] = useState<Photo[] | null>(null);
   const [category, setCategory] = useState<string>("all");
   const [kindFilter, setKindFilter] = useState<"all" | "jpeg" | "raw">("all");

@@ -2,6 +2,8 @@ import { createSupabaseServerClient } from "@otak/supabase";
 import { Card } from "@otak/ui";
 import { notFound } from "next/navigation";
 import { UploadForm } from "./upload-form";
+import { createSupabaseServiceRoleClient } from "@otak/supabase/server";
+import { loadPhotoCategories } from "@otak/supabase/photo-categories";
 
 /** Завантаження фото для конкретного класу. Категорія обирається вручну під час завантаження. */
 export default async function ClassUploadPage({ params }: { params: { classId: string } }) {
@@ -23,7 +25,14 @@ export default async function ClassUploadPage({ params }: { params: { classId: s
 
   return (
     <Card title={`Завантаження фото — ${klass.name}, ${(klass as any).schools?.name ?? ""}`} menu={false}>
-      <UploadForm classId={klass.id} students={students ?? []} />
+      <UploadForm
+        classId={klass.id}
+        students={students ?? []}
+        categories={(await loadPhotoCategories(createSupabaseServiceRoleClient())).map((c) => ({
+          value: c.key,
+          label: c.key === "personal" ? `${c.label} (для одного учня)` : c.label,
+        }))}
+      />
     </Card>
   );
 }
