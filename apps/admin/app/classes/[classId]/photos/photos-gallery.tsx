@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Download, FolderOpen } from "lucide-react";
+import { ArrowDownWideNarrow, ArrowUpNarrowWide, Download, FolderOpen } from "lucide-react";
 import { createSupabaseBrowserClient } from "@otak/supabase/browser";
 import { CategoryIcon } from "@/lib/photo-categories";
-import { compareFilenamesDesc } from "@otak/supabase/photo-variants";
+import { compareFilenames, compareFilenamesDesc } from "@otak/supabase/photo-variants";
 
 type Photo = {
   id: string;
@@ -65,7 +65,7 @@ function buildShot(key: string, cluster: Photo[]): Shot {
   return { key, category: cluster[0].category, baseName: baseName(cluster[0].filename), jpeg, raws, uploadedAt };
 }
 
-function groupShots(photos: Photo[]): Shot[] {
+function groupShots(photos: Photo[], newestFirst: boolean): Shot[] {
   // 1) спершу — грубе відро за категорією + іменем файлу.
   const buckets = new Map<string, Photo[]>();
   for (const photo of photos) {
@@ -96,8 +96,10 @@ function groupShots(photos: Photo[]): Shot[] {
     }
   }
 
-  // Плитки за номером кадру, від нових до старих (R6__1890, R6__1889, …), як у галереї батьків.
-  return shots.sort((a, b) => compareFilenamesDesc(a.baseName, b.baseName));
+  // Плитки за номером кадру: за замовчуванням від нових до старих (як у батьків), перемикач — у шапці.
+  return shots.sort((a, b) =>
+    newestFirst ? compareFilenamesDesc(a.baseName, b.baseName) : compareFilenames(a.baseName, b.baseName)
+  );
 }
 
 function ShotTile({ shot }: { shot: Shot }) {
@@ -154,6 +156,19 @@ export function PhotosGallery({ classId }: { classId: string }) {
   const [photos, setPhotos] = useState<Photo[] | null>(null);
   const [category, setCategory] = useState<string>("all");
   const [kindFilter, setKindFilter] = useState<"all" | "jpeg" | "raw">("all");
+  // Порядок кадрів — лише в адмінці; вибір запам'ятовується в браузері.
+  const [newestFirst, setNewestFirst] = useState(true);
+  useEffect(() => {
+    try {
+      if (localStorage.getItem("otak-admin-photo-order") === "oldest") setNewestFirst(false);
+    } catch {}
+  }, []);
+  function changeOrder(next: boolean) {
+    setNewestFirst(next);
+    try {
+      localStorage.setItem("otak-admin-photo-order", next ? "newest" : "oldest");
+    } catch {}
+  }
 
   const [live, setLive] = useState(false);
   const loading = useRef(false);
@@ -222,8 +237,8 @@ export function PhotosGallery({ classId }: { classId: string }) {
       if (kindFilter !== "all" && p.file_kind !== kindFilter) return false;
       return true;
     });
-    return groupShots(filtered);
-  }, [photos, category, kindFilter]);
+    return groupShots(filtered, newestFirst);
+  }, [photos, category, kindFilter, newestFirst]);
 
   const counts = useMemo(() => {
     const jpeg = (photos ?? []).filter((p) => p.file_kind === "jpeg").length;
@@ -267,6 +282,21 @@ export function PhotosGallery({ classId }: { classId: string }) {
           ))}
         </div>
 
+        <div className="flex flex-wrap gap-2">
+        <div className="flex gap-[3px] rounded-[9px] border border-line bg-card p-[3px]">
+          {([true, false] as const).map((v) => (
+            <button
+              key={String(v)}
+              onClick={() => changeOrder(v)}
+              className={`inline-flex items-center gap-1 rounded-[6px] px-3 py-[7px] text-xs font-semibold ${
+                newestFirst === v ? "bg-purple-pale text-purple-deep" : "text-ink-soft"
+              }`}
+            >
+              {v ? <ArrowDownWideNarrow className="h-3.5 w-3.5" /> : <ArrowUpNarrowWide className="h-3.5 w-3.5" />}
+              {v ? "Нові спершу" : "Старі спершу"}
+            </button>
+          ))}
+        </div>
         <div className="flex gap-[3px] rounded-[9px] border border-line bg-card p-[3px]">
           {(["all", "jpeg", "raw"] as const).map((k) => (
             <button
@@ -279,6 +309,7 @@ export function PhotosGallery({ classId }: { classId: string }) {
               {k === "all" ? `Усі (${counts.total})` : k === "jpeg" ? `JPEG (${counts.jpeg})` : `RAW (${counts.raw})`}
             </button>
           ))}
+        </div>
         </div>
       </div>
 
