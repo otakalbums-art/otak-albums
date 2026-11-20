@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { downloadZip } from "client-zip";
 import { PhotoTile } from "@otak/ui";
 import { redirectToLogin } from "@/lib/session-redirect";
-import { Heart, X } from "lucide-react";
+import { CheckSquare, Download, Heart, X } from "lucide-react";
 
 type Photo = {
   id: string;
@@ -15,6 +16,20 @@ type Photo = {
 };
 
 const POLL_MS = 4000;
+const ZIP_MAX = 500;
+
+/** Назви файлів у ZIP мають бути унікальні: "R6__0740.JPG", "R6__0740 (2).JPG"… */
+function uniqueNames(names: string[]) {
+  const used = new Map<string, number>();
+  return names.map((n) => {
+    const k = n.toLowerCase();
+    const c = (used.get(k) ?? 0) + 1;
+    used.set(k, c);
+    if (c === 1) return n;
+    const dot = n.lastIndexOf(".");
+    return dot > 0 ? `${n.slice(0, dot)} (${c})${n.slice(dot)}` : `${n} (${c})`;
+  });
+}
 
 /**
  * Галерея класу. Реалізовано:
@@ -23,6 +38,8 @@ const POLL_MS = 4000;
  *    ручного оновлення сторінки
  *  - лайк ★ прямо на плитці; саме формування фото для альбому зі свого
  *    обраного — окрема сторінка /album (apps/client/app/album/page.tsx)
+ *  - завантаження оригіналів JPEG: кнопка на кожній плитці й у перегляді,
+ *    а в режимі «Вибрати» — кілька фото одним ZIP (пакується в браузері)
  *
  * Чому не Supabase Realtime (postgres_changes): RLS для anon-ролі
  * навмисно закритий (docs/auth-strategy.md) — учні ходять лише через
@@ -38,6 +55,11 @@ export default function GalleryPage() {
   const [filter, setFilter] = useState<"all" | "favorites">("all");
   const [isLive, setIsLive] = useState(false);
   const [openPhotoId, setOpenPhotoId] = useState<string | null>(null);
+  // Режим вибору: клік по плитці вибирає її, вибрані завантажуються одним ZIP.
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [zip, setZip] = useState<{ done: number; total: number } | null>(null);
+  const [zipError, setZipError] = useState<string | null>(null);
 
   function refetch() {
     return fetch("/api/photos")
@@ -96,6 +118,81 @@ export default function GalleryPage() {
     await fetch(`/api/photos/${photoId}/favorite`, { method: "POST" });
   }
 
+  function toggleSelected(photoId: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(photoId)) next.delete(photoId);
+      else next.add(photoId);
+      return next;
+    });
+  }
+
+  function stopSelecting() {
+    setSelecting(false);
+    setSelected(new Set());
+    setZipError(null);
+  }
+
+  const allVisibleSelected = visible.length > 0 && visible.every((p) => selected.has(p.id));
+  function toggleSelectAll() {
+    setSelected(allVisibleSelected ? new Set() : new Set(visible.map((p) => p.id)));
+  }
+
+  async function downloadSelected() {
+    const ids = photos.filter((p) => selected.has(p.id)).map((p) => p.id);
+    if (!ids.length) return;
+    setZipError(null);
+    // Одне фото — без архіву, просто файл.
+    if (ids.length === 1) {
+      window.location.href = `/api/photos/${ids[0]}/download`;
+      return;
+    }
+    if (ids.length > ZIP_MAX) {
+      setZipError(`За раз можна завантажити до ${ZIP_MAX} фото — зніміть вибір з частини.`);
+      return;
+    }
+    setZip({ done: 0, total: ids.length });
+    try {
+      const res = await fetch("/api/photos/download", { method: "POST", body: JSON.stringify({ ids }) });
+      if (res.status === 401) {
+        redirectToLogin();
+        return;
+      }
+      const { files, error } = (await res.json()) as {
+        files?: { filename: string; url: string }[];
+        error?: string;
+      };
+      if (!res.ok || !files?.length) throw new Error(error ?? "Не вдалося підготувати фото");
+      const names = uniqueNames(files.map((f) => f.filename));
+      let done = 0;
+      // Оригінали тягнуться по одному прямо зі сховища й одразу пакуються в архів.
+      async function* entries() {
+        for (let i = 0; i < files!.length; i++) {
+          const r = await fetch(files![i].url);
+          if (!r.ok) throw new Error(`Не вдалося завантажити ${files![i].filename}`);
+          const input = await r.blob();
+          setZip({ done: ++done, total: files!.length });
+          yield { name: names[i], lastModified: new Date(), input };
+        }
+      }
+      const blob = await downloadZip(entries()).blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const base = (classInfo?.name ?? "Фото").replace(/[\\/:*?"<>|]+/g, " ").trim() || "Фото";
+      a.download = `${base} — ${files.length} фото.zip`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      stopSelecting();
+    } catch (e) {
+      setZipError(e instanceof Error ? e.message : "Не вдалося завантажити фото");
+    } finally {
+      setZip(null);
+    }
+  }
+
   return (
     <div>
       <div className="mb-1 flex items-center justify-between gap-3">
@@ -104,24 +201,36 @@ export default function GalleryPage() {
         </h1>
       </div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex gap-[3px] rounded-[9px] border border-line bg-card p-[3px]">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex gap-[3px] rounded-[9px] border border-line bg-card p-[3px]">
+            <button
+              onClick={() => setFilter("all")}
+              className={`rounded-[6px] px-3.5 py-[7px] text-xs font-semibold ${
+                filter === "all" ? "bg-purple-pale text-purple-deep" : "text-ink-soft"
+              }`}
+            >
+              Усі фото
+            </button>
+            <button
+              onClick={() => setFilter("favorites")}
+              className={`rounded-[6px] px-3.5 py-[7px] text-xs font-semibold ${
+                filter === "favorites" ? "bg-purple-pale text-purple-deep" : "text-ink-soft"
+              }`}
+            >
+              <span className="inline-flex items-center gap-1">
+                <Heart className="h-3.5 w-3.5" /> Обране
+              </span>
+            </button>
+          </div>
           <button
-            onClick={() => setFilter("all")}
-            className={`rounded-[6px] px-3.5 py-[7px] text-xs font-semibold ${
-              filter === "all" ? "bg-purple-pale text-purple-deep" : "text-ink-soft"
+            onClick={() => (selecting ? stopSelecting() : setSelecting(true))}
+            disabled={!photos.length}
+            className={`inline-flex items-center gap-1.5 rounded-[9px] border px-3.5 py-[9px] text-xs font-semibold disabled:opacity-40 ${
+              selecting ? "border-purple bg-purple-pale text-purple-deep" : "border-line bg-card text-ink"
             }`}
           >
-            Усі фото
-          </button>
-          <button
-            onClick={() => setFilter("favorites")}
-            className={`rounded-[6px] px-3.5 py-[7px] text-xs font-semibold ${
-              filter === "favorites" ? "bg-purple-pale text-purple-deep" : "text-ink-soft"
-            }`}
-          >
-            <span className="inline-flex items-center gap-1">
-              <Heart className="h-3.5 w-3.5" /> Обране
-            </span>
+            <CheckSquare className="h-3.5 w-3.5" />
+            {selecting ? "Скасувати вибір" : "Вибрати для завантаження"}
           </button>
         </div>
         <span
@@ -134,7 +243,14 @@ export default function GalleryPage() {
         </span>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      {selecting && (
+        <p className="mb-3 text-xs text-ink-soft">
+          Торкніться фото, щоб вибрати їх, і натисніть «Завантажити» внизу — вибрані прийдуть одним ZIP-архівом в
+          оригінальній якості.
+        </p>
+      )}
+
+      <div className={`grid grid-cols-2 gap-3 sm:grid-cols-4 ${selecting ? "pb-28" : ""}`}>
         {visible.map((photo) => (
           <PhotoTile
             key={photo.id}
@@ -142,7 +258,10 @@ export default function GalleryPage() {
             thumbnailUrl={photo.thumbnailUrl}
             isFavorite={photo.is_favorite}
             onToggleFavorite={() => toggleFavorite(photo.id)}
-            onOpen={() => setOpenPhotoId(photo.id)}
+            isSelected={selected.has(photo.id)}
+            onToggleSelect={selecting ? () => toggleSelected(photo.id) : undefined}
+            onOpen={() => (selecting ? toggleSelected(photo.id) : setOpenPhotoId(photo.id))}
+            downloadHref={selecting ? undefined : `/api/photos/${photo.id}/download`}
           />
         ))}
       </div>
@@ -154,9 +273,43 @@ export default function GalleryPage() {
       )}
 
       <p className="mt-4 text-xs text-ink-soft">
-        Показані лише файли формату <b>.jpeg</b> — фільтрація за типом застосовується автоматично
-        під час завантаження на сервер.
+        Показані лише файли формату <b>.jpeg</b>. Кнопка <Download className="inline h-3 w-3" /> на фото завантажує
+        його в оригінальній якості; щоб завантажити кілька — «Вибрати для завантаження».
       </p>
+
+      {selecting && (
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-card/95 px-4 py-3 shadow-[0_-4px_16px_rgba(0,0,0,0.08)] backdrop-blur">
+          <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-3 gap-y-2">
+            <span className="text-sm font-semibold">Вибрано: {selected.size}</span>
+            <button
+              onClick={toggleSelectAll}
+              disabled={!!zip}
+              className="text-xs font-semibold text-purple-deep underline-offset-2 hover:underline"
+            >
+              {allVisibleSelected ? "Зняти всі" : `Вибрати всі (${visible.length})`}
+            </button>
+            <div className="ml-auto flex items-center gap-2">
+              <button
+                onClick={stopSelecting}
+                disabled={!!zip}
+                className="rounded-[9px] px-3 py-2 text-xs font-semibold text-ink-soft"
+              >
+                Скасувати
+              </button>
+              <button
+                onClick={downloadSelected}
+                disabled={!selected.size || !!zip}
+                className="inline-flex items-center gap-1.5 rounded-[9px] bg-purple px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50"
+              >
+                <Download className="h-4 w-4" />
+                {zip ? `Готуємо ${zip.done} з ${zip.total}…` : `Завантажити${selected.size ? ` (${selected.size})` : ""}`}
+              </button>
+            </div>
+            {zipError && <p className="w-full text-xs text-warn">{zipError}</p>}
+            {zip && <p className="w-full text-[11px] text-ink-soft">Не закривайте сторінку, поки архів готується.</p>}
+          </div>
+        </div>
+      )}
 
       {openPhoto && (
         <div
@@ -171,10 +324,8 @@ export default function GalleryPage() {
             <X className="h-5 w-5" />
           </button>
 
-          {/* Не <img> навмисно — background-image прибирає найлегшу ціль
-              для "Зберегти зображення як…" з контекстного меню браузера
-              (не 100% захист, повний обхід завжди можливий через
-              devtools/мережу, але прибирає простий шлях в один клік). */}
+          {/* Не <img> навмисно: тут лише стиснений preview, а зберігати треба
+              оригінал — для цього кнопка «Завантажити» нижче. */}
           <div
             role="img"
             aria-label={openPhoto.filename}
@@ -187,9 +338,9 @@ export default function GalleryPage() {
 
           <div
             onClick={(e) => e.stopPropagation()}
-            className="absolute bottom-6 left-1/2 flex -translate-x-1/2 items-center gap-3 rounded-full bg-black/50 px-4 py-2.5 backdrop-blur-sm"
+            className="absolute bottom-6 left-1/2 flex -translate-x-1/2 items-center gap-4 whitespace-nowrap rounded-full bg-black/50 px-4 py-2.5 backdrop-blur-sm"
           >
-            <span className="font-mono text-xs text-white/80">{openPhoto.filename}</span>
+            <span className="hidden font-mono text-xs text-white/80 sm:inline">{openPhoto.filename}</span>
             <button
               onClick={() => toggleFavorite(openPhoto.id)}
               className={`inline-flex items-center gap-1.5 text-sm font-bold ${openPhoto.is_favorite ? "text-white" : "text-white/60"}`}
@@ -197,6 +348,14 @@ export default function GalleryPage() {
               <Heart className={`h-4 w-4 ${openPhoto.is_favorite ? "fill-white" : ""}`} />
               {openPhoto.is_favorite ? "В обраному" : "В обране"}
             </button>
+            <a
+              href={`/api/photos/${openPhoto.id}/download`}
+              download
+              className="inline-flex items-center gap-1.5 text-sm font-bold text-white/80 hover:text-white"
+            >
+              <Download className="h-4 w-4" />
+              Завантажити
+            </a>
           </div>
         </div>
       )}

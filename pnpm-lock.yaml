@@ -99,6 +99,9 @@ importers:
       '@otak/ui':
         specifier: workspace:*
         version: link:../../packages/ui
+      client-zip:
+        specifier: 2.4.5
+        version: 2.4.5
       lucide-react:
         specifier: 0.460.0
         version: 0.460.0(react@18.3.1)
@@ -656,6 +659,9 @@ packages:
 
   client-only@0.0.1:
     resolution: {integrity: sha512-IV3Ou0jSMzZrd3pZ48nLkT9DA7Ag1pnPzaiQhpW7c3RbcqqzvzzVu+L8gfqMp/8IM2MQtSiqaCxrrcfu8I8rMA==}
+
+  client-zip@2.4.5:
+    resolution: {integrity: sha512-4y4d5ZeTH/szIAMQeC8ju67pxtvj+3u20wMGwOFrZk+pegy3aSEA2JkwgC8XVDTXP/Iqn1gyqNQXmkyBp4KLEQ==}
 
   cliui@6.0.0:
     resolution: {integrity: sha512-t6wbgtoCXvAzst7QgXxJYqPt0usEfbgQdftEPbLL/cvv6HPE5VgvqCuAIDR0NgU52ds6rFwqrgakNLrHEjCbrQ==}
@@ -1834,6 +1840,8 @@ snapshots:
       fsevents: 2.3.3
 
   client-only@0.0.1: {}
+
+  client-zip@2.4.5: {}
 
   cliui@6.0.0:
     dependencies:
