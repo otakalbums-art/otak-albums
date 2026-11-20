@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
+
 interface PhotoTileProps {
   filename: string;
   thumbnailUrl?: string;
@@ -20,13 +22,38 @@ export function PhotoTile({
   onToggleSelect,
   onOpen,
 }: PhotoTileProps) {
+  // Ліниве завантаження: фон-картинку ставимо, лише коли плитка за ~1,5 екрана
+  // від видимої області — сотні фото не тягнуться одночасно при відкритті галереї.
+  const ref = useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || visible) return;
+    if (typeof IntersectionObserver === "undefined") {
+      setVisible(true);
+      return;
+    }
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          setVisible(true);
+          io.disconnect();
+        }
+      },
+      { rootMargin: "150% 0px" }
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [visible]);
+
   return (
     <div
+      ref={ref}
       onClick={onOpen}
       onContextMenu={(e) => e.preventDefault()}
       onDragStart={(e) => e.preventDefault()}
       className="relative aspect-[4/5] cursor-pointer select-none overflow-hidden rounded-[11px] border border-line bg-gradient-to-br from-purple-pale to-purple-soft [-webkit-touch-callout:none]"
-      style={thumbnailUrl ? { backgroundImage: `url(${thumbnailUrl})`, backgroundSize: "cover" } : undefined}
+      style={visible && thumbnailUrl ? { backgroundImage: `url(${thumbnailUrl})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}
     >
       <span className="absolute left-[7px] top-[7px] rounded-md bg-black/60 px-1.5 py-0.5 font-mono text-[9.5px] text-white">
         JPEG

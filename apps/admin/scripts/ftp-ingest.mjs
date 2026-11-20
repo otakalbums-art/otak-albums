@@ -45,6 +45,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import FtpSrv, { FileSystem } from "ftp-srv";
+import { uploadVariants, variantPaths } from "./photo-variants.mjs";
 import { createHmac, randomUUID, timingSafeEqual } from "crypto";
 import { networkInterfaces } from "os";
 import { fileURLToPath } from "url";
@@ -397,6 +398,9 @@ async function ingest(filePath) {
       .upload(storagePath, bytes, { contentType, upsert: false });
     if (uploadError) throw uploadError;
 
+    // Мініатюра й preview — до появи запису в БД, щоб галерея одразу тягнула легку версію.
+    if (fileType === "jpeg") await uploadVariants(supabase, storagePath, bytes, log);
+
     // Той самий кадр уже є (камера перенадіслала після обриву) — замінюємо файл
     // у наявному записі: вибір учнів, обране й CRM-слоти, прив'язані до id, лишаються.
     const { data: existing } = await supabase
@@ -415,7 +419,10 @@ async function ingest(filePath) {
         .update({ storage_path: storagePath, file_type: fileType, uploaded_at: new Date().toISOString() })
         .eq("id", previous.id);
       if (updateError) throw updateError;
-      await supabase.storage.from("photos").remove([previous.storage_path]).catch(() => {});
+      await supabase.storage
+        .from("photos")
+        .remove([previous.storage_path, ...variantPaths(previous.storage_path)])
+        .catch(() => {});
     } else {
       const { error: insertError } = await supabase.from("photos").insert({
         class_id: classId,

@@ -3,6 +3,7 @@ import { randomUUID } from "crypto";
 import { createSupabaseServiceRoleClient } from "@otak/supabase/server";
 import { requireAdmin } from "@/lib/require-admin";
 import { detectFileType, folderFor } from "@/lib/file-type";
+import { uploadVariants } from "@/lib/photo-variants-gen";
 
 const ALLOWED_CATEGORIES = ["portrait", "group", "ceremony", "personal", "uncategorized"] as const;
 type Category = (typeof ALLOWED_CATEGORIES)[number];
@@ -63,6 +64,9 @@ export async function POST(req: Request) {
       skipped.push({ filename: file.name, reason: uploadError.message });
       continue;
     }
+
+    // Мініатюра й preview для галерей — до появи запису, як і на сервері камер.
+    if (fileType === "jpeg") await uploadVariants(service, storagePath, bytes);
 
     const { error: insertError } = await service.from("photos").insert({
       class_id: classId,

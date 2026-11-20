@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServiceRoleClient } from "@otak/supabase/server";
 import { requireAdmin } from "@/lib/require-admin";
+import { signPhotoUrls } from "@otak/supabase/photo-variants";
 
 /**
  * GET /api/classes/[classId]/photos — усі фото класу для адмінки, і JPEG,
@@ -25,14 +26,16 @@ export async function GET(_req: Request, { params }: { params: { classId: string
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   const paths = (photos ?? []).map((p: any) => p.storage_path);
-  const { data: signedUrls } = paths.length
-    ? await service.storage.from("photos").createSignedUrls(paths, 60 * 60) // 1 год
-    : { data: [] as any[] };
-  const urlByPath = new Map((signedUrls ?? []).map((s: any) => [s.path, s.signedUrl]));
+  // Сітка — мініатюри, посилання "відкрити" — оригінал (packages/supabase/src/photo-variants.ts).
+  const [thumbByPath, fullByPath] = await Promise.all([
+    signPhotoUrls(service, paths, "thumb"),
+    signPhotoUrls(service, paths, "original"),
+  ]);
 
   const mapped = (photos ?? []).map((p: any) => ({
     ...p,
-    url: urlByPath.get(p.storage_path) ?? null,
+    url: thumbByPath.get(p.storage_path) ?? null,
+    fullUrl: fullByPath.get(p.storage_path) ?? null,
   }));
 
   return NextResponse.json({ photos: mapped });

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServiceRoleClient } from "@otak/supabase/server";
 import { requireAdmin } from "@/lib/require-admin";
+import { signPhotoUrls } from "@otak/supabase/photo-variants";
 import { parseQuestions, parseTimeGroups } from "@otak/supabase/cabinet";
 
 /**
@@ -97,10 +98,8 @@ export async function GET(_req: Request, { params }: { params: { classId: string
   // Signed URLs для всіх фото, задіяних у слотах — одним батчем, як і в
   // /api/classes/[classId]/photos.
   const paths = (slotPhotos ?? []).map((sp: any) => sp.photos?.storage_path).filter(Boolean);
-  const { data: signedUrls } = paths.length
-    ? await service.storage.from("photos").createSignedUrls(paths, 60 * 60)
-    : { data: [] as any[] };
-  const urlByPath = new Map((signedUrls ?? []).map((s: any) => [s.path, s.signedUrl]));
+  // Мініатюри (~480 px) замість оригіналів — packages/supabase/src/photo-variants.ts.
+  const urlByPath = await signPhotoUrls(service, paths, "thumb");
 
   const valuesByStudent = new Map<string, Record<string, any>>();
   for (const student of students ?? []) {

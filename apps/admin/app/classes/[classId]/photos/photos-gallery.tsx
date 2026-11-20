@@ -14,7 +14,8 @@ type Photo = {
   category: string;
   student_id: string | null;
   uploaded_at: string;
-  url: string | null;
+  url: string | null; // мініатюра для сітки
+  fullUrl: string | null; // оригінал — для "відкрити"
 };
 
 // Ті самі категорії й підписи, що й на /ftp-import (apps/admin/app/ftp-import/ftp-control-panel.tsx)
@@ -127,7 +128,7 @@ function ShotTile({ shot }: { shot: Shot }) {
         </span>
         <div className="flex flex-wrap gap-2">
           {shot.jpeg?.url && (
-            <a href={shot.jpeg.url} target="_blank" rel="noreferrer" className="text-[11px] font-semibold text-purple hover:underline">
+            <a href={shot.jpeg.fullUrl ?? shot.jpeg.url} target="_blank" rel="noreferrer" className="text-[11px] font-semibold text-purple hover:underline">
               Відкрити JPEG
             </a>
           )}
@@ -175,10 +176,12 @@ export function PhotosGallery({ classId }: { classId: string }) {
         // Signed URL щоразу новий — для вже показаних фото лишаємо старий, щоб плитки не блимали.
         setPhotos((prev) => {
           // Ключ — id + шлях файлу: якщо камера перенадіслала кадр, показуємо новий файл.
-          const known = new Map((prev ?? []).map((p) => [`${p.id}|${p.storage_path}`, p.url]));
+          // Мініатюра могла з'явитись пізніше за фото (backfill) — тоді URL міняється з оригіналу на /THUMB/.
+          const known = new Map((prev ?? []).map((p) => [`${p.id}|${p.storage_path}`, p]));
           return next.map((p) => {
-            const url = known.get(`${p.id}|${p.storage_path}`);
-            return url ? { ...p, url } : p;
+            const seen = known.get(`${p.id}|${p.storage_path}`);
+            const sameKind = seen && seen.url?.includes("/THUMB/") === p.url?.includes("/THUMB/");
+            return seen && sameKind ? { ...p, url: seen.url, fullUrl: seen.fullUrl } : p;
           });
         });
       } finally {

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createSupabaseServiceRoleClient } from "@otak/supabase";
+import { signPhotoUrls } from "@otak/supabase/photo-variants";
 
 /**
  * GET /api/album-slots — фото-слоти (kind='photo') типу альбому класу
@@ -55,12 +56,8 @@ export async function GET() {
   const paths = new Set<string>();
   for (const r of assignedRows ?? []) if ((r as any).photos?.storage_path) paths.add((r as any).photos.storage_path);
   for (const r of favoriteRows ?? []) if ((r as any).photos?.storage_path) paths.add((r as any).photos.storage_path);
-  const { data: signedUrls } = paths.size
-    ? await supabase.storage.from("photos").createSignedUrls([...paths], 60 * 60)
-    : { data: [] as any[] };
-  const urlByPath = new Map<string, string>(
-    (signedUrls ?? []).map((s: any) => [s.path, s.signedUrl] as [string, string])
-  );
+  // Мініатюри (~480 px) замість оригіналів — packages/supabase/src/photo-variants.ts.
+  const urlByPath = await signPhotoUrls(supabase, [...paths], "thumb");
 
   const assignments: Record<string, { id: string; filename: string; url: string | null }[]> = {};
   (assignedRows ?? []).forEach((r: any) => {

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServiceRoleClient } from "@otak/supabase/server";
 import { requireAdmin } from "@/lib/require-admin";
+import { signPhotoUrls } from "@otak/supabase/photo-variants";
 
 /**
  * GET /api/students/[studentId]/photo-picks — два додаткові джерела фото
@@ -25,10 +26,8 @@ export async function GET(_req: Request, { params }: { params: { studentId: stri
   const paths = new Set<string>();
   for (const r of favoriteRows ?? []) if ((r as any).photos?.storage_path) paths.add((r as any).photos.storage_path);
   for (const r of slotPhotoRows ?? []) if ((r as any).photos?.storage_path) paths.add((r as any).photos.storage_path);
-  const { data: signedUrls } = paths.size
-    ? await service.storage.from("photos").createSignedUrls([...paths], 60 * 60)
-    : { data: [] as any[] };
-  const urlByPath = new Map((signedUrls ?? []).map((s: any) => [s.path, s.signedUrl]));
+  // Мініатюри (~480 px) замість оригіналів — packages/supabase/src/photo-variants.ts.
+  const urlByPath = await signPhotoUrls(service, [...paths], "thumb");
 
   const favorites = (favoriteRows ?? [])
     .filter((r: any) => r.photos)

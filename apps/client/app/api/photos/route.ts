@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createSupabaseServiceRoleClient } from "@otak/supabase";
+import { signPhotoUrls } from "@otak/supabase/photo-variants";
 
 /**
  * GET /api/photos            — усі фото класу поточного учня + прапорець favorite + class {name, schoolName}
@@ -40,18 +41,21 @@ export async function GET(req: Request) {
   // Bucket "photos" приватний — прев'ю/повнорозмірні фото віддаються лише
   // через короткоживучі signed URLs, згенеровані тут service_role клієнтом.
   const paths = (photos ?? []).map((p: any) => p.storage_path);
-  const { data: signedUrls } = paths.length
-    ? await supabase.storage.from("photos").createSignedUrls(paths, 60 * 60) // 1 год
-    : { data: [] as any[] };
-  const urlByPath = new Map((signedUrls ?? []).map((s: any) => [s.path, s.signedUrl]));
+  // Сітка — мініатюра (~480 px, десятки КБ), перегляд на весь екран — preview
+  // (~1600 px); оригінали по 3–4 МБ галерея більше не тягне (photo-variants.ts).
+  const [thumbByPath, previewByPath] = await Promise.all([
+    signPhotoUrls(supabase, paths, "thumb"),
+    signPhotoUrls(supabase, paths, "preview"),
+  ]);
 
   const mapped = (photos ?? [])
     .map((p: any) => ({
       id: p.id,
       filename: p.filename,
-      thumbnailUrl: urlByPath.get(p.storage_path),
-      // Змінюється, коли камера перенадіслала кадр і файл замінено — галерея тоді бере новий URL.
-      version: p.storage_path,
+      thumbnailUrl: thumbByPath.get(p.storage_path),
+      previewUrl: previewByPath.get(p.storage_path),
+      // Змінюється, коли кадр замінено або для нього з'явилась мініатюра — галерея тоді бере новий URL.
+      version: `${p.storage_path}|${thumbByPath.get(p.storage_path)?.includes("/THUMB/") ? "t" : "o"}`,
       is_favorite: p.favorites?.some((f: any) => f.student_id === student.id),
     }))
     .filter((p: any) => !favoritesOnly || p.is_favorite);

@@ -9,6 +9,7 @@ type Photo = {
   id: string;
   filename: string;
   thumbnailUrl?: string;
+  previewUrl?: string;
   version?: string;
   is_favorite: boolean;
 };
@@ -60,11 +61,11 @@ export default function GalleryPage() {
         // все одно оновлюємо — раптом змінилось з іншого пристрою.
         setPhotos((prev) => {
           // Ключ — id + версія файлу: замінений камерою кадр отримує свіжий URL.
-          const known = new Map(prev.map((p) => [`${p.id}|${p.version}`, p.thumbnailUrl]));
-          return (data.photos ?? []).map((p: Photo) => ({
-            ...p,
-            thumbnailUrl: known.get(`${p.id}|${p.version}`) ?? p.thumbnailUrl,
-          }));
+          const known = new Map(prev.map((p) => [`${p.id}|${p.version}`, p]));
+          return (data.photos ?? []).map((p: Photo) => {
+            const seen = known.get(`${p.id}|${p.version}`);
+            return seen ? { ...p, thumbnailUrl: seen.thumbnailUrl, previewUrl: seen.previewUrl } : p;
+          });
         });
         if (data.class) setClassInfo(data.class);
         setIsLive(true);
@@ -181,7 +182,7 @@ export default function GalleryPage() {
             onContextMenu={(e) => e.preventDefault()}
             onDragStart={(e) => e.preventDefault()}
             className="h-[85vh] w-[90vw] select-none rounded-lg bg-contain bg-center bg-no-repeat shadow-2xl [-webkit-touch-callout:none]"
-            style={{ backgroundImage: `url(${openPhoto.thumbnailUrl})` }}
+            style={{ backgroundImage: `url(${openPhoto.previewUrl ?? openPhoto.thumbnailUrl})` }}
           />
 
           <div
