@@ -1,0 +1,21 @@
+# Аналіз облич на фото (scripts/face-worker.py) на сервері камер.
+# Встановлення: cp otak-faces.service /etc/systemd/system/ && systemctl enable --now otak-faces
+# Nice/CPUQuota — щоб під час зйомки прийом фото з камери (otak-ftp) мав пріоритет.
+[Unit]
+Description=Otak Albums face worker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=otakftp
+WorkingDirectory=/opt/otak-ftp
+ExecStart=/opt/otak-ftp/faces-venv/bin/python -u /opt/otak-ftp/scripts/face-worker.py
+Restart=always
+RestartSec=10
+Nice=15
+CPUQuota=70%
+MemoryMax=450M
+Environment=OMP_NUM_THREADS=1
+
+[Install]
+WantedBy=multi-user.target
