@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDownWideNarrow, ArrowUpNarrowWide, Download, FolderOpen } from "lucide-react";
+import { ArrowDownWideNarrow, ArrowUpNarrowWide, Check, Download, FolderOpen, Trash2 } from "lucide-react";
 import { createSupabaseBrowserClient } from "@otak/supabase/browser";
 import { CategoryIcon } from "@/lib/photo-categories";
 import { compareFilenames, compareFilenamesDesc } from "@otak/supabase/photo-variants";
@@ -97,14 +97,51 @@ function groupShots(photos: Photo[], newestFirst: boolean): Shot[] {
   );
 }
 
-function ShotTile({ shot }: { shot: Shot }) {
+/** Усі файли кадру (JPEG + RAW) — видаляються разом. */
+function shotIds(shot: Shot) {
+  return [...(shot.jpeg ? [shot.jpeg.id] : []), ...shot.raws.map((r) => r.id)];
+}
+
+function ShotTile({
+  shot,
+  selecting,
+  selected,
+  onToggle,
+  onDelete,
+}: {
+  shot: Shot;
+  selecting: boolean;
+  selected: boolean;
+  onToggle: () => void;
+  onDelete: () => void;
+}) {
   const hasPreview = !!shot.jpeg?.url;
   return (
-    <div className="overflow-hidden rounded-[11px] border border-line bg-page">
+    <div className={`overflow-hidden rounded-[11px] border bg-page ${selected ? "border-warn ring-2 ring-warn" : "border-line"}`}>
       <div
-        className="relative aspect-[4/5] bg-gradient-to-br from-purple-pale to-purple-soft bg-cover bg-center"
+        onClick={selecting ? onToggle : undefined}
+        className={`group relative aspect-[4/5] bg-gradient-to-br from-purple-pale to-purple-soft bg-cover bg-center ${
+          selecting ? "cursor-pointer" : ""
+        }`}
         style={hasPreview ? { backgroundImage: `url(${shot.jpeg!.url})` } : undefined}
       >
+        {selecting ? (
+          <span
+            className={`absolute right-[7px] top-[7px] flex h-[22px] w-[22px] items-center justify-center rounded-full border-2 border-white shadow ${
+              selected ? "bg-warn" : "bg-black/30"
+            }`}
+          >
+            {selected && <Check className="h-3 w-3 text-white" strokeWidth={3.5} />}
+          </span>
+        ) : (
+          <button
+            onClick={onDelete}
+            title="Видалити кадр (JPEG і RAW) назавжди"
+            className="absolute right-[6px] top-[6px] flex h-[26px] w-[26px] items-center justify-center rounded-full bg-black/45 text-white opacity-0 transition-opacity hover:bg-warn focus:opacity-100 group-hover:opacity-100"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        )}
         {!hasPreview && (
           <div className="flex h-full w-full items-center justify-center text-purple-deep/40">
             <FolderOpen className="h-8 w-8" />
@@ -167,6 +204,13 @@ export function PhotosGallery({ classId }: { classId: string }) {
 
   const [live, setLive] = useState(false);
   const loading = useRef(false);
+  const reload = useRef<() => void>(() => {});
+
+  // Видалення: режим вибору (ключі плиток) або кнопка-кошик на одній плитці.
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [deleting, setDeleting] = useState(false);
+  const [notice, setNotice] = useState<{ type: "ok" | "error"; text: string } | null>(null);
 
   /**
    * Нові/видалені фото без перезавантаження сторінки: Supabase Realtime на
@@ -202,6 +246,7 @@ export function PhotosGallery({ classId }: { classId: string }) {
     }
 
     load();
+    reload.current = load;
     const supabase = createSupabaseBrowserClient();
     let timer: ReturnType<typeof setTimeout> | undefined;
     // Камера шле кадри серіями — збираємо їх в одне оновлення.
@@ -241,9 +286,64 @@ export function PhotosGallery({ classId }: { classId: string }) {
     return { jpeg, raw, total: (photos ?? []).length };
   }, [photos]);
 
+  function toggleShot(key: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  function stopSelecting() {
+    setSelecting(false);
+    setSelected(new Set());
+  }
+
+  async function deleteShots(targets: Shot[]) {
+    const ids = targets.flatMap(shotIds);
+    if (!ids.length) return;
+    const jpegs = targets.filter((t) => t.jpeg).length;
+    const raws = targets.reduce((n, t) => n + t.raws.length, 0);
+    const what =
+      targets.length === 1
+        ? `кадр ${targets[0].jpeg?.filename ?? targets[0].raws[0]?.filename}`
+        : `${targets.length} кадрів`;
+    const question = [
+      `Видалити ${what} назавжди?`,
+      "",
+      `Файлів: JPEG — ${jpegs}, RAW — ${raws}.`,
+      "Фото зникнуть і з галереї батьків, з їхнього «Обраного» та вибору для альбому. Відновити буде неможливо.",
+    ].join("\n");
+    if (!confirm(question)) return;
+    setDeleting(true);
+    setNotice(null);
+    try {
+      const res = await fetch(`/api/classes/${classId}/photos`, { method: "DELETE", body: JSON.stringify({ ids }) });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "Не вдалося видалити");
+      const gone = new Set(ids);
+      setPhotos((prev) => (prev ?? []).filter((p) => !gone.has(p.id)));
+      stopSelecting();
+      setNotice({
+        type: "ok",
+        text: `Видалено файлів: ${data.deleted}.${
+          data.unconfirmed ? ` У ${data.unconfirmed} дітей це фото було у вибраному для альбому — їм треба вибрати заново.` : ""
+        }`,
+      });
+    } catch (e) {
+      setNotice({ type: "error", text: e instanceof Error ? e.message : "Не вдалося видалити" });
+    } finally {
+      setDeleting(false);
+      reload.current();
+    }
+  }
+
   if (photos === null) {
     return <p className="text-sm text-ink-soft">Завантажуємо…</p>;
   }
+
+  const allSelected = shots.length > 0 && shots.every((s) => selected.has(s.key));
 
   return (
     <div>
@@ -332,12 +432,58 @@ export function PhotosGallery({ classId }: { classId: string }) {
         </a>
       </div>
 
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <button
+          onClick={() => (selecting ? stopSelecting() : setSelecting(true))}
+          disabled={!shots.length || deleting}
+          className={`inline-flex items-center gap-1 rounded-[9px] border-[1.5px] px-3 py-1.5 text-[12px] font-bold disabled:opacity-40 ${
+            selecting ? "border-warn bg-[#FDECEC] text-warn" : "border-line bg-card text-ink hover:border-warn"
+          }`}
+        >
+          <Trash2 className="h-3.5 w-3.5" /> {selecting ? "Скасувати вибір" : "Вибрати для видалення"}
+        </button>
+        {selecting && (
+          <>
+            <button
+              onClick={() => setSelected(allSelected ? new Set() : new Set(shots.map((s) => s.key)))}
+              className="text-[12px] font-semibold text-purple-deep hover:underline"
+            >
+              {allSelected ? "Зняти всі" : `Вибрати всі показані (${shots.length})`}
+            </button>
+            <button
+              onClick={() => deleteShots(shots.filter((s) => selected.has(s.key)))}
+              disabled={!selected.size || deleting}
+              className="inline-flex items-center gap-1 rounded-[9px] bg-warn px-3 py-1.5 text-[12px] font-bold text-white disabled:opacity-40"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              {deleting ? "Видаляємо…" : `Видалити вибрані (${selected.size})`}
+            </button>
+          </>
+        )}
+        {notice && (
+          <span className={`text-[12px] font-semibold ${notice.type === "ok" ? "text-ok" : "text-warn"}`}>{notice.text}</span>
+        )}
+      </div>
+      {selecting && (
+        <p className="-mt-2 mb-3 text-[11px] text-ink-soft">
+          Клікайте по плитках, щоб вибрати. Кадр видаляється разом з усіма своїми файлами (JPEG і RAW). Фільтри категорій і
+          JPEG/RAW вище звужують те, що показано і що вибере «Вибрати всі показані».
+        </p>
+      )}
+
       {shots.length === 0 ? (
         <p className="text-sm text-ink-soft">Фото ще не завантажені.</p>
       ) : (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5">
           {shots.map((shot) => (
-            <ShotTile key={shot.key} shot={shot} />
+            <ShotTile
+              key={shot.key}
+              shot={shot}
+              selecting={selecting}
+              selected={selected.has(shot.key)}
+              onToggle={() => toggleShot(shot.key)}
+              onDelete={() => deleteShots([shot])}
+            />
           ))}
         </div>
       )}
