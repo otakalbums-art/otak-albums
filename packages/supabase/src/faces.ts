@@ -17,7 +17,9 @@ export const FACE_THRESHOLDS = {
   seriesLink: 0.45, // сусідні кадри — одна серія, якщо схожість ≥ цього
   seriesGap: 8, // і різниця номерів кадрів ≤ цього
   seriesMatch: 0.75, // серія — та сама дитина, що й запит
-  faceMatch: 0.6, // окреме обличчя (напр. на груповому фото) — та сама дитина
+  faceMatch: 0.67, // окреме обличчя (напр. на груповому фото) — та сама дитина (плато 0.66–0.70 на тесті)
+  seriesMatchStrict: 0.85, // перший, суворий прохід (див. findChildPhotos)
+  faceMatchStrict: 0.7,
 };
 
 function dot(a: number[], b: number[]) {
@@ -107,14 +109,29 @@ export function findChildPhotos(photos: FacePhoto[], faces: FaceRow[], photoId: 
     if (best >= 0) query = centroids[best];
   }
 
-  const result = new Set<string>([photoId]);
-  centroids.forEach((c, i) => {
-    if (dot(c, query) >= T.seriesMatch) series[i].ids.forEach((id) => result.add(id));
-  });
-  for (const [pid, list] of byPhoto) {
-    if (list.some((f) => dot(f.embedding, query) >= T.faceMatch)) result.add(pid);
+  // Прохід: серії, схожі на запит, + окремі обличчя (групові фото), схожі на запит.
+  // Повертає знайдені фото й найсхожіше обличчя на кожному.
+  function pass(q: number[], seriesT: number, faceT: number) {
+    const found = new Map<string, number[]>();
+    centroids.forEach((c, i) => {
+      if (dot(c, q) < seriesT) return;
+      for (const id of series[i].ids) found.set(id, byPhoto.get(id)!.find((f) => f.face_index === 0)!.embedding);
+    });
+    for (const [pid, list] of byPhoto) {
+      const best = list.reduce((a, b) => (dot(b.embedding, q) > dot(a.embedding, q) ? b : a));
+      if (dot(best.embedding, q) >= faceT && !found.has(pid)) found.set(pid, best.embedding);
+    }
+    return found;
   }
-  return [...result];
+
+  // Два проходи: спершу суворо (лише найнадійніші фото дитини), потім шукаємо
+  // ще раз за усередненим обличчям з усіх знайдених — так знаходяться її фото
+  // в іншому одязі/серії, а схожі чужі діти не проходять (тест «Старша 1»).
+  const strict = pass(query, T.seriesMatchStrict, T.faceMatchStrict);
+  const refined = strict.size >= 3 ? mean([...strict.values()]) : query;
+  const result = pass(refined, T.seriesMatch, T.faceMatch);
+  result.set(photoId, selected.embedding);
+  return [...result.keys()];
 }
 
 /** Ціль автосортування для кадру з count облич за правилами категорій (або null). */
