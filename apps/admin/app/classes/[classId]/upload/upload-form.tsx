@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { Button } from "@otak/ui";
+import { createSupabaseBrowserClient } from "@otak/supabase/browser";
 
 type Student = { id: string; first_name: string; last_name: string };
 
@@ -13,15 +14,36 @@ const CATEGORIES: { value: string; label: string }[] = [
   { value: "uncategorized", label: "Без категорії" },
 ];
 
+type Prepared = {
+  name: string;
+  path?: string;
+  token?: string;
+  fileType?: string;
+  category?: string;
+  studentId?: string | null;
+  paired?: boolean;
+  error?: string;
+};
+
+type Result = { jpeg: number; rawPaired: number; rawAlone: number; replaced: number; failed: { filename: string; reason: string }[] };
+
+const BATCH = 25; // скільки посилань просимо за раз
+const PARALLEL = 3; // скільки файлів вантажимо одночасно
+
+/**
+ * Ручне завантаження: файли йдуть із браузера напряму в Supabase Storage
+ * (підписані посилання з /api/photos/upload-urls), без ліміту Vercel на
+ * розмір запиту — тож і RAW по ~20 МБ, і сотні файлів за раз. RAW сам стає
+ * в пару до свого JPEG за назвою файлу (R6__0740.CR3 ↔ R6__0740.JPG).
+ */
 export function UploadForm({ classId, students }: { classId: string; students: Student[] }) {
   const [category, setCategory] = useState("uncategorized");
   const [studentId, setStudentId] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [status, setStatus] = useState<"idle" | "uploading" | "done">("idle");
-  const [result, setResult] = useState<{ inserted: number; skipped: { filename: string; reason: string }[] } | null>(
-    null
-  );
+  const [progress, setProgress] = useState({ done: 0, total: 0 });
+  const [result, setResult] = useState<Result | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   function addFiles(list: FileList | null) {
@@ -36,20 +58,74 @@ export function UploadForm({ classId, students }: { classId: string; students: S
       return;
     }
 
+    const supabase = createSupabaseBrowserClient();
+    const res: Result = { jpeg: 0, rawPaired: 0, rawAlone: 0, replaced: 0, failed: [] };
+    const queue = [...files];
     setStatus("uploading");
-    const formData = new FormData();
-    formData.set("classId", classId);
-    formData.set("category", category);
-    if (category === "personal") formData.set("studentId", studentId);
-    files.forEach((f) => formData.append("files", f));
+    setResult(null);
+    setProgress({ done: 0, total: queue.length });
 
-    const res = await fetch("/api/photos/upload", { method: "POST", body: formData });
-    const data = await res.json();
+    async function uploadOne(file: File, prep: Prepared) {
+      if (prep.error || !prep.path || !prep.token) {
+        res.failed.push({ filename: file.name, reason: prep.error ?? "не вдалося підготувати" });
+        return;
+      }
+      const contentType = prep.fileType === "jpeg" ? "image/jpeg" : "application/octet-stream";
+      const { error } = await supabase.storage.from("photos").uploadToSignedUrl(prep.path, prep.token, file, { contentType });
+      if (error) {
+        res.failed.push({ filename: file.name, reason: error.message });
+        return;
+      }
+      const reg = await fetch("/api/photos/register", {
+        method: "POST",
+        body: JSON.stringify({
+          classId,
+          path: prep.path,
+          filename: file.name,
+          category: prep.category,
+          studentId: prep.studentId,
+        }),
+      });
+      const data = await reg.json().catch(() => ({}));
+      if (!reg.ok) {
+        res.failed.push({ filename: file.name, reason: data.error ?? "не вдалося зберегти" });
+        return;
+      }
+      if (data.replaced) res.replaced++;
+      if (prep.fileType === "jpeg") res.jpeg++;
+      else if (prep.paired) res.rawPaired++;
+      else res.rawAlone++;
+    }
 
-    setResult({ inserted: data.inserted?.length ?? 0, skipped: data.skipped ?? [] });
+    while (queue.length) {
+      const batch = queue.splice(0, BATCH);
+      const urls = await fetch("/api/photos/upload-urls", {
+        method: "POST",
+        body: JSON.stringify({ classId, category, studentId: category === "personal" ? studentId : null, files: batch.map((f) => f.name) }),
+      });
+      const { items, error } = await urls.json().catch(() => ({ items: null, error: "помилка сервера" }));
+      if (!urls.ok || !items) {
+        batch.forEach((f) => res.failed.push({ filename: f.name, reason: error ?? "помилка сервера" }));
+        setProgress((p) => ({ ...p, done: p.done + batch.length }));
+        continue;
+      }
+      const pending = batch.map((f, i) => [f, items[i] as Prepared] as const);
+      async function worker() {
+        while (pending.length) {
+          const [file, prep] = pending.shift()!;
+          await uploadOne(file, prep);
+          setProgress((p) => ({ ...p, done: p.done + 1 }));
+        }
+      }
+      await Promise.all(Array.from({ length: PARALLEL }, worker));
+    }
+
+    setResult(res);
     setStatus("done");
     setFiles([]);
   }
+
+  const uploaded = result ? result.jpeg + result.rawPaired + result.rawAlone : 0;
 
   return (
     <div className="flex flex-col gap-4">
@@ -67,6 +143,9 @@ export function UploadForm({ classId, students }: { classId: string; students: S
               </option>
             ))}
           </select>
+          <p className="mt-1 text-[11px] text-ink-soft">
+            RAW, для яких уже є JPEG з такою ж назвою, автоматично стануть у пару й отримають категорію свого JPEG.
+          </p>
         </div>
         {category === "personal" && (
           <div>
@@ -103,7 +182,8 @@ export function UploadForm({ classId, students }: { classId: string; students: S
           isDragging ? "border-purple bg-purple-pale text-purple-deep" : "border-line text-ink-soft"
         }`}
       >
-        Перетягни JPEG або RAW-файли сюди (CR2, CR3, NEF, ARW, RAF, ORF, RW2, DNG…) або натисни, щоб обрати
+        Перетягни JPEG або RAW-файли сюди (CR2, CR3, NEF, ARW, RAF, ORF, RW2, DNG…) або натисни, щоб обрати. Можна сотні
+        файлів одразу, розмір не обмежений.
         <input
           ref={inputRef}
           type="file"
@@ -114,9 +194,24 @@ export function UploadForm({ classId, students }: { classId: string; students: S
         />
       </div>
 
-      {files.length > 0 && (
+      {files.length > 0 && status !== "uploading" && (
         <div className="text-xs text-ink-soft">
-          Обрано файлів: <b className="text-ink">{files.length}</b>
+          Обрано файлів: <b className="text-ink">{files.length}</b> ·{" "}
+          {(files.reduce((s, f) => s + f.size, 0) / 1e9).toFixed(2)} ГБ
+        </div>
+      )}
+
+      {status === "uploading" && (
+        <div>
+          <div className="mb-1 text-xs font-semibold">
+            Завантажено {progress.done} з {progress.total} — не закривайте сторінку
+          </div>
+          <div className="h-2 overflow-hidden rounded-full bg-purple-pale">
+            <div
+              className="h-full bg-purple transition-all"
+              style={{ width: `${progress.total ? (progress.done / progress.total) * 100 : 0}%` }}
+            />
+          </div>
         </div>
       )}
 
@@ -126,12 +221,18 @@ export function UploadForm({ classId, students }: { classId: string; students: S
 
       {result && (
         <div className="rounded-[9px] border border-line p-3 text-xs">
-          <p className="font-semibold text-ok">Завантажено: {result.inserted}</p>
-          {result.skipped.length > 0 && (
+          <p className="font-semibold text-ok">Завантажено: {uploaded}</p>
+          <ul className="ml-4 mt-1 list-disc text-ink-soft">
+            {result.jpeg > 0 && <li>JPEG: {result.jpeg}</li>}
+            {result.rawPaired > 0 && <li>RAW у парі зі своїм JPEG: {result.rawPaired}</li>}
+            {result.rawAlone > 0 && <li>RAW без JPEG (лягли в обрану категорію): {result.rawAlone}</li>}
+            {result.replaced > 0 && <li>Замінено попередні версії: {result.replaced}</li>}
+          </ul>
+          {result.failed.length > 0 && (
             <div className="mt-1.5 text-warn">
-              Пропущено:
+              Не вдалося ({result.failed.length}):
               <ul className="ml-4 list-disc">
-                {result.skipped.map((s, i) => (
+                {result.failed.map((s, i) => (
                   <li key={i}>
                     {s.filename} — {s.reason}
                   </li>

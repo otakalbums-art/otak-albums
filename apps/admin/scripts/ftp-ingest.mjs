@@ -362,7 +362,7 @@ async function ingest(filePath) {
   // segments = [classId, ...можлива категорія-підпапка..., filename]
   // Камера без вказаної Directory пише прямо в корінь -> segments.length === 2.
   const maybeCategory = segments.length >= 3 ? segments[1] : null;
-  const category = CATEGORIES.includes(maybeCategory) ? maybeCategory : "uncategorized";
+  let category = CATEGORIES.includes(maybeCategory) ? maybeCategory : "uncategorized";
 
   try {
     const { data: klass } = await supabase.from("classes").select("id").eq("id", classId).maybeSingle();
@@ -386,6 +386,21 @@ async function ingest(filePath) {
       await fs.promises.rename(filePath, dest);
       log(`[ftp-ingest] ⚠ ${filename} недокачаний (немає кінця JPEG) — не публікую, чекаю повторної передачі`);
       return;
+    }
+
+    // RAW (напр. скинутий пізніше з картки через FTP) — у категорію свого JPEG
+    // з тією ж назвою, щоб в адмінці вони стали однією плиткою.
+    if (fileType !== "jpeg") {
+      const base = filename.replace(/\.[^.]+$/, "");
+      const { data: twins } = await supabase
+        .from("photos")
+        .select("filename, category")
+        .eq("class_id", classId)
+        .eq("file_type", "jpeg")
+        .ilike("filename", `${base}.%`)
+        .limit(5);
+      const twin = (twins ?? []).find((t) => t.filename.replace(/\.[^.]+$/, "").toLowerCase() === base.toLowerCase());
+      if (twin && twin.category !== category) category = twin.category;
     }
 
     const bytes = await fs.promises.readFile(filePath);

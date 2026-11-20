@@ -36,13 +36,6 @@ function baseName(filename: string) {
   return filename.replace(/\.[^.]+$/, "").toLowerCase();
 }
 
-// Камера завантажує JPEG і RAW одного натискання затвора практично одночасно
-// (секунди між файлами через FTP/ручне завантаження) — тож пару в межах
-// одного вікна вважаємо одним кадром. Якщо просто збігається ім'я файлу, але
-// вони прилетіли з різницею більшою за це вікно (напр. лічильник кадрів на
-// картці камери перегорнувся через день/тиждень зйомки і повторив ім'я) —
-// це вже різні кадри, і об'єднувати їх в одну плитку не варто.
-const PAIR_WINDOW_MS = 5 * 60 * 1000; // 5 хв
 
 type Shot = {
   key: string;
@@ -75,25 +68,27 @@ function groupShots(photos: Photo[], newestFirst: boolean): Shot[] {
     else buckets.set(key, [photo]);
   }
 
-  // 2) усередині кожного відра — розбиваємо на кластери за часом
-  //    завантаження: JPEG+RAW одного кадру лишаються разом, випадковий
-  //    повтор імені файлу з великим розривом у часі стає окремою плиткою.
+  // 2) JPEG і RAW одного кадру — одна плитка, навіть якщо RAW завантажили
+  //    пізніше вручну (через години). Лише коли в категорії кілька JPEG з
+  //    однаковою назвою (лічильник камери перегорнувся) — кожен JPEG окремо,
+  //    а RAW прив'язуємо до найближчого за часом.
   const shots: Shot[] = [];
   for (const [key, bucket] of buckets) {
-    const sorted = [...bucket].sort((a, b) => a.uploaded_at.localeCompare(b.uploaded_at));
-    let clusterStart = 0;
-    let clusterIndex = 0;
-    for (let i = 1; i <= sorted.length; i++) {
-      const isLast = i === sorted.length;
-      const gap = isLast
-        ? Infinity
-        : new Date(sorted[i].uploaded_at).getTime() - new Date(sorted[i - 1].uploaded_at).getTime();
-      if (isLast || gap > PAIR_WINDOW_MS) {
-        shots.push(buildShot(`${key}::${clusterIndex}`, sorted.slice(clusterStart, i)));
-        clusterStart = i;
-        clusterIndex++;
-      }
+    const jpegs = bucket.filter((p) => p.file_kind === "jpeg");
+    if (jpegs.length <= 1) {
+      shots.push(buildShot(`${key}::0`, bucket));
+      continue;
     }
+    const groups = jpegs.map((j) => [j] as Photo[]);
+    for (const raw of bucket.filter((p) => p.file_kind !== "jpeg")) {
+      const t = new Date(raw.uploaded_at).getTime();
+      let best = 0;
+      jpegs.forEach((j, i) => {
+        if (Math.abs(new Date(j.uploaded_at).getTime() - t) < Math.abs(new Date(jpegs[best].uploaded_at).getTime() - t)) best = i;
+      });
+      groups[best].push(raw);
+    }
+    groups.forEach((g, i) => shots.push(buildShot(`${key}::${i}`, g)));
   }
 
   // Плитки за номером кадру: за замовчуванням від нових до старих (як у батьків), перемикач — у шапці.
