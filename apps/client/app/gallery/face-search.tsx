@@ -1,9 +1,21 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { Loader2, ScanFace, X } from "lucide-react";
 
 type Face = { face_index: number; box: number[] };
+
+/**
+ * Модалки — у document.body: кнопка живе в нижній панелі перегляду фото, а та
+ * зсунута transform-ом, і position:fixed усередині неї рахувався б від панелі,
+ * а не від екрана (вікно «провалювалось» униз і обрізалось на телефоні).
+ */
+function Portal({ children }: { children: ReactNode }) {
+  const [ready, setReady] = useState(false);
+  useEffect(() => setReady(true), []);
+  return ready ? createPortal(children, document.body) : null;
+}
 
 /**
  * «Знайти мою дитину» у перегляді фото: бере обличчя з фото (якщо їх кілька —
@@ -90,14 +102,15 @@ export function FaceSearchButton({
       </button>
 
       {note && (
-        <div className="absolute -top-12 left-1/2 w-max max-w-[86vw] -translate-x-1/2 rounded-lg bg-white px-3 py-2 text-center text-xs font-semibold text-ink shadow-lg">
+        <div className="absolute bottom-full left-1/2 mb-2 w-max max-w-[86vw] -translate-x-1/2 whitespace-normal rounded-lg bg-white px-3 py-2 text-center text-xs font-semibold text-ink shadow-lg">
           {note}
         </div>
       )}
 
       {picker && (
+        <Portal>
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4" onClick={() => setPicker(null)}>
-          <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md rounded-2xl bg-card p-4 shadow-card">
+          <div onClick={(e) => e.stopPropagation()} className="max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-2xl bg-card p-4 shadow-card">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-sm font-bold">Хто ваша дитина на цьому фото?</h3>
               <button onClick={() => setPicker(null)} aria-label="Закрити" className="text-ink-soft">
@@ -118,11 +131,13 @@ export function FaceSearchButton({
             </div>
           </div>
         </div>
+        </Portal>
       )}
 
       {askConsentFor !== null && (
+        <Portal>
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-card p-5 shadow-card">
+          <div className="max-h-[90dvh] w-full max-w-md overflow-y-auto whitespace-normal rounded-2xl bg-card p-5 shadow-card">
             <h3 className="mb-2 flex items-center gap-1.5 text-[15px] font-bold">
               <ScanFace className="h-5 w-5 text-purple" /> Пошук дитини за обличчям
             </h3>
@@ -159,6 +174,7 @@ export function FaceSearchButton({
             </div>
           </div>
         </div>
+        </Portal>
       )}
     </>
   );
