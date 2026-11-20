@@ -19,7 +19,7 @@ export default async function ClassesPage() {
   const supabase = createSupabaseServerClient();
   const { data: classes } = await supabase
     .from("classes")
-    .select("id, name, kind, referral_code, status, parent_editing_enabled, parent_gallery_enabled, parent_download_enabled, schools(name), photos(id)")
+    .select("id, name, kind, referral_code, status, parent_editing_enabled, parent_gallery_enabled, parent_download_enabled, schools(name), photos(count)")
     .order("created_at", { ascending: false });
 
   const { data: schools } = await supabase.from("schools").select("id, name").order("name");
@@ -131,7 +131,7 @@ function ClassesTable({ classes }: { classes: any[] }) {
                 )}
                 {c.name}, {c.schools?.name}
               </td>
-              <td className="px-3 py-2.5">{c.photos?.length ?? 0}</td>
+              <td className="px-3 py-2.5">{c.photos?.[0]?.count ?? 0}</td>
               <td className="px-3 py-2.5">
                 <ReferralLinkCell url={`${SITE_URL}/login/${c.referral_code}`} />
               </td>
@@ -169,7 +169,7 @@ function ClassesTable({ classes }: { classes: any[] }) {
                   <ClassRowActions
                     classId={c.id}
                     classLabel={c.name}
-                    photoCount={c.photos?.length ?? 0}
+                    photoCount={c.photos?.[0]?.count ?? 0}
                     archived={c.status === "archived"}
                   />
                 </div>

@@ -3,6 +3,7 @@ import { Readable } from "stream";
 import archiver from "archiver";
 import { createSupabaseServiceRoleClient } from "@otak/supabase/server";
 import { requireAdmin } from "@/lib/require-admin";
+import { fetchAllRows } from "@otak/supabase/paginate";
 
 const KIND_LABEL: Record<string, string> = { all: "усі", jpeg: "jpeg", raw: "raw" };
 
@@ -27,14 +28,15 @@ export async function GET(req: Request, { params }: { params: { classId: string 
 
   const { data: klass } = await service.from("classes").select("name").eq("id", params.classId).maybeSingle();
 
-  let query = service
-    .from("photos")
-    .select("filename, storage_path, category, file_kind")
-    .eq("class_id", params.classId);
-  if (kind !== "all") query = query.eq("file_kind", kind);
-  if (category !== "all") query = query.eq("category", category);
-
-  const { data: photos } = await query;
+  const photos = await fetchAllRows((from, to) => {
+    let query = service
+      .from("photos")
+      .select("filename, storage_path, category, file_kind")
+      .eq("class_id", params.classId);
+    if (kind !== "all") query = query.eq("file_kind", kind);
+    if (category !== "all") query = query.eq("category", category);
+    return query.order("uploaded_at").order("id").range(from, to);
+  });
   if (!photos || photos.length === 0) {
     return NextResponse.json({ error: "Немає фото за обраними фільтрами" }, { status: 404 });
   }

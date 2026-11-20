@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServiceRoleClient } from "@otak/supabase/server";
 import { requireAdmin } from "@/lib/require-admin";
+import { fetchAllRows } from "@otak/supabase/paginate";
 
 /**
  * PATCH /api/classes/[classId] — перенести клас в архів або повернути з нього.
@@ -56,11 +57,14 @@ export async function DELETE(req: Request, { params }: { params: { classId: stri
     return NextResponse.json({ error: "Назва класу не збігається — видалення скасовано" }, { status: 400 });
   }
 
-  const { data: photos, error: photosError } = await service
-    .from("photos")
-    .select("storage_path")
-    .eq("class_id", params.classId);
-  if (photosError) return NextResponse.json({ error: photosError.message }, { status: 400 });
+  let photos: { storage_path: string }[];
+  try {
+    photos = await fetchAllRows((from, to) =>
+      service.from("photos").select("storage_path").eq("class_id", params.classId).order("id").range(from, to)
+    );
+  } catch (e) {
+    return NextResponse.json({ error: (e as Error).message }, { status: 400 });
+  }
 
   // Видаляємо і файли з таблиці photos, і все, що лежить у папці класу
   // ({classId}/...) — туди могли потрапити файли без рядка в БД (обірване

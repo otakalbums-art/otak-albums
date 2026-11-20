@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createSupabaseServiceRoleClient } from "@otak/supabase/server";
 import { requireAdmin } from "@/lib/require-admin";
 import { compareFilenamesDesc, signPhotoUrls, variantPath } from "@otak/supabase/photo-variants";
+import { fetchAllRows } from "@otak/supabase/paginate";
 
 /**
  * GET /api/classes/[classId]/photos — усі фото класу для адмінки, і JPEG,
@@ -17,13 +18,21 @@ export async function GET(_req: Request, { params }: { params: { classId: string
   if (!user) return NextResponse.json({ error: "Доступ заборонено" }, { status: 403 });
 
   const service = createSupabaseServiceRoleClient();
-  const { data: photos, error } = await service
-    .from("photos")
-    .select("id, filename, storage_path, file_type, file_kind, category, student_id, uploaded_at")
-    .eq("class_id", params.classId)
-    .order("uploaded_at", { ascending: false });
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  // Сторінками: Supabase віддає максимум 1000 рядків за запит, а за зйомку файлів більше.
+  let photos: any[];
+  try {
+    photos = await fetchAllRows((from, to) =>
+      service
+        .from("photos")
+        .select("id, filename, storage_path, file_type, file_kind, category, student_id, uploaded_at")
+        .eq("class_id", params.classId)
+        .order("uploaded_at", { ascending: false })
+        .order("id")
+        .range(from, to)
+    );
+  } catch (e) {
+    return NextResponse.json({ error: (e as Error).message }, { status: 500 });
+  }
 
   const paths = (photos ?? []).map((p: any) => p.storage_path);
   // Сітка — мініатюри, посилання "відкрити" — оригінал (packages/supabase/src/photo-variants.ts).

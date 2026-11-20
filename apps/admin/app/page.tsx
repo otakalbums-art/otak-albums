@@ -88,14 +88,20 @@ export default async function DashboardPage() {
   }
   const profit = paidRevenue - paidCost;
 
-  const { data: photoRows } = await supabase.from("photos").select("category");
-  const CATEGORY_LABELS = Object.fromEntries(
-    (await loadPhotoCategories(createSupabaseServiceRoleClient())).map((c) => [c.key, c.label])
+  // Лічильники через count, а не вибірку рядків (вибірка обрізалась би на 1000).
+  const photoCategories = await loadPhotoCategories(createSupabaseServiceRoleClient());
+  const CATEGORY_LABELS = Object.fromEntries(photoCategories.map((c) => [c.key, c.label]));
+  const counted = await Promise.all(
+    photoCategories.map((c) =>
+      supabase
+        .from("photos")
+        .select("id", { count: "exact", head: true })
+        .eq("category", c.key)
+        .then((r) => [c.key, r.count ?? 0] as const)
+    )
   );
-  const categoryCounts = (photoRows ?? []).reduce((acc: Record<string, number>, p: any) => {
-    acc[p.category] = (acc[p.category] ?? 0) + 1;
-    return acc;
-  }, {});
+  const categoryCounts: Record<string, number> = Object.fromEntries(counted.filter(([, n]) => n > 0));
+  const totalPhotos = counted.reduce((sum, [, n]) => sum + n, 0);
   const categorySegments = Object.entries(categoryCounts).map(([key, value], i) => ({
     label: CATEGORY_LABELS[key] ?? key,
     value: value as number,
@@ -226,7 +232,7 @@ export default async function DashboardPage() {
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         <Card title="Фото за категоріями" menu={false}>
           {categorySegments.length > 0 ? (
-            <Donut segments={categorySegments} centerLabel={photoRows?.length ?? 0} />
+            <Donut segments={categorySegments} centerLabel={totalPhotos} />
           ) : (
             <p className="text-sm text-ink-soft">Фото ще не завантажені.</p>
           )}

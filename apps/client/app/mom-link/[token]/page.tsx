@@ -2,6 +2,8 @@ import { createSupabaseServiceRoleClient } from "@otak/supabase";
 import { PhotoTile } from "@otak/ui";
 import { notFound } from "next/navigation";
 import { hiddenCategoryKeys, inList } from "@otak/supabase/photo-categories";
+import { fetchAllRows } from "@otak/supabase/paginate";
+import { signPhotoUrls } from "@otak/supabase/photo-variants";
 
 // Ця сторінка не викликає cookies()/headers() ніде (сервісний ключ, не
 // студентська сесія), тож без цього Next.js вважав би її статичною —
@@ -49,19 +51,19 @@ export default async function MomLinkPage({ params }: { params: { token: string 
   }
 
   const hidden = await hiddenCategoryKeys(supabase);
-  let photosQuery = supabase
-    .from("photos")
-    .select("id, filename, storage_path")
-    .eq("class_id", link.class_id)
-    .eq("file_type", "jpeg");
-  if (hidden.length) photosQuery = photosQuery.not("category", "in", inList(hidden));
-  const { data: photos } = await photosQuery.order("uploaded_at", { ascending: false });
+  const photos = await fetchAllRows((from, to) => {
+    let q = supabase
+      .from("photos")
+      .select("id, filename, storage_path")
+      .eq("class_id", link.class_id)
+      .eq("file_type", "jpeg");
+    if (hidden.length) q = q.not("category", "in", inList(hidden));
+    return q.order("uploaded_at", { ascending: false }).order("id").range(from, to);
+  });
 
   const paths = (photos ?? []).map((p: any) => p.storage_path);
-  const { data: signedUrls } = paths.length
-    ? await supabase.storage.from("photos").createSignedUrls(paths, 60 * 60)
-    : { data: [] as any[] };
-  const urlByPath = new Map((signedUrls ?? []).map((s: any) => [s.path, s.signedUrl]));
+  // Мініатюри пачками (ліміт Supabase — 1000 шляхів на запит), з фолбеком на оригінал.
+  const urlByPath = await signPhotoUrls(supabase, paths, "thumb");
 
   return (
     <div>

@@ -10,7 +10,8 @@
     "./server": "./src/server.ts",
     "./cabinet": "./src/cabinet.ts",
     "./photo-variants": "./src/photo-variants.ts",
-    "./photo-categories": "./src/photo-categories.ts"
+    "./photo-categories": "./src/photo-categories.ts",
+    "./paginate": "./src/paginate.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",

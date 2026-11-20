@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { createSupabaseServiceRoleClient } from "@otak/supabase";
 import { compareFilenamesDesc, signPhotoUrls } from "@otak/supabase/photo-variants";
 import { hiddenCategoryKeys, inList } from "@otak/supabase/photo-categories";
+import { fetchAllRows } from "@otak/supabase/paginate";
 
 /**
  * GET /api/photos            — усі фото класу поточного учня + прапорець favorite + class {name, schoolName}
@@ -41,13 +42,16 @@ export async function GET(req: Request) {
 
   // Категорії, приховані від батьків в адмінці («Категорії фото»).
   const hidden = await hiddenCategoryKeys(supabase);
-  let photosQuery = supabase
-    .from("photos")
-    .select("id, filename, storage_path, favorites(student_id)")
-    .eq("class_id", student.class_id)
-    .eq("file_type", "jpeg");
-  if (hidden.length) photosQuery = photosQuery.not("category", "in", inList(hidden));
-  const { data: photos } = await photosQuery.order("uploaded_at", { ascending: false });
+  // Сторінками: Supabase віддає максимум 1000 рядків за запит.
+  const photos = await fetchAllRows((from, to) => {
+    let q = supabase
+      .from("photos")
+      .select("id, filename, storage_path, favorites(student_id)")
+      .eq("class_id", student.class_id)
+      .eq("file_type", "jpeg");
+    if (hidden.length) q = q.not("category", "in", inList(hidden));
+    return q.order("uploaded_at", { ascending: false }).order("id").range(from, to);
+  });
 
   // Bucket "photos" приватний — прев'ю/повнорозмірні фото віддаються лише
   // через короткоживучі signed URLs, згенеровані тут service_role клієнтом.
