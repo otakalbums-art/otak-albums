@@ -13,6 +13,7 @@ type Photo = {
   thumbnailUrl?: string;
   previewUrl?: string;
   version?: string;
+  category?: string;
   is_favorite: boolean;
 };
 
@@ -66,6 +67,9 @@ export default function GalleryPage() {
   // «Знайти мою дитину»: згода батьків і результат пошуку (id фото дитини).
   const [faceConsent, setFaceConsent] = useState(false);
   const [childIds, setChildIds] = useState<Set<string> | null>(null);
+  // Фільтр за категорією (Портрети, Групові…) — назви й порядок з адмінки.
+  const [categories, setCategories] = useState<{ key: string; label: string }[]>([]);
+  const [category, setCategory] = useState<string>("all");
 
   function refetch() {
     return fetch("/api/photos")
@@ -97,6 +101,7 @@ export default function GalleryPage() {
         });
         if (data.class) setClassInfo(data.class);
         setFaceConsent(!!data.faceConsent);
+        setCategories(data.categories ?? []);
         const next = { gallery: data.galleryEnabled !== false, download: data.downloadEnabled !== false };
         setAccess((prev) => (prev.gallery === next.gallery && prev.download === next.download ? prev : next));
         // Адмін щойно закрив завантаження — виходимо з режиму вибору.
@@ -124,7 +129,10 @@ export default function GalleryPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, [openPhotoId]);
 
-  const byFilter = filter === "favorites" ? photos.filter((p) => p.is_favorite) : photos;
+  const activeCategory = categories.some((c) => c.key === category) ? category : "all";
+  const byFilter = photos.filter(
+    (p) => (filter !== "favorites" || p.is_favorite) && (activeCategory === "all" || p.category === activeCategory)
+  );
   const visible = childIds ? byFilter.filter((p) => childIds.has(p.id)) : byFilter;
 
   async function revokeFaceConsent() {
@@ -266,6 +274,31 @@ export default function GalleryPage() {
           {isLive ? "Оновлюється автоматично" : "Завантаження…"}
         </span>
       </div>
+
+      {access.gallery && categories.length > 1 && (
+        <div className="mb-4 flex flex-wrap gap-1.5">
+          {[{ key: "all", label: "Усі" }, ...categories].map((c) => {
+            const count =
+              c.key === "all"
+                ? null
+                : photos.filter((p) => p.category === c.key && (filter !== "favorites" || p.is_favorite)).length;
+            return (
+              <button
+                key={c.key}
+                onClick={() => setCategory(c.key)}
+                className={`rounded-full border-[1.5px] px-3 py-1 text-xs font-semibold transition-colors ${
+                  activeCategory === c.key
+                    ? "border-purple bg-purple-pale text-purple-deep"
+                    : "border-line bg-card text-ink-soft hover:border-purple-soft"
+                }`}
+              >
+                {c.label}
+                {count !== null && <span className="ml-1 opacity-60">{count}</span>}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {childIds && (
         <div className="mb-3 flex flex-wrap items-center gap-2 rounded-[10px] border border-purple-soft bg-purple-pale px-3 py-2 text-[13px]">
@@ -423,6 +456,7 @@ export default function GalleryPage() {
               onResult={(ids) => {
                 setChildIds(new Set(ids));
                 setFilter("all");
+                setCategory("all");
                 setOpenPhotoId(null);
                 window.scrollTo({ top: 0, behavior: "smooth" });
               }}

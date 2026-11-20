@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createSupabaseServiceRoleClient } from "@otak/supabase";
 import { compareFilenamesDesc, signPhotoUrls } from "@otak/supabase/photo-variants";
-import { hiddenCategoryKeys, inList } from "@otak/supabase/photo-categories";
+import { inList, loadPhotoCategories } from "@otak/supabase/photo-categories";
 import { fetchAllRows } from "@otak/supabase/paginate";
 
 /**
@@ -41,12 +41,13 @@ export async function GET(req: Request) {
   const favoritesOnly = searchParams.get("favorites") === "1";
 
   // Категорії, приховані від батьків в адмінці («Категорії фото»).
-  const hidden = await hiddenCategoryKeys(supabase);
+  const categories = await loadPhotoCategories(supabase);
+  const hidden = categories.filter((c) => c.hidden_from_parents).map((c) => c.key);
   // Сторінками: Supabase віддає максимум 1000 рядків за запит.
   const photos = await fetchAllRows((from, to) => {
     let q = supabase
       .from("photos")
-      .select("id, filename, storage_path, favorites(student_id)")
+      .select("id, filename, storage_path, category, favorites(student_id)")
       .eq("class_id", student.class_id)
       .eq("file_type", "jpeg");
     if (hidden.length) q = q.not("category", "in", inList(hidden));
@@ -67,6 +68,7 @@ export async function GET(req: Request) {
     .map((p: any) => ({
       id: p.id,
       filename: p.filename,
+      category: p.category,
       thumbnailUrl: thumbByPath.get(p.storage_path),
       previewUrl: previewByPath.get(p.storage_path),
       // Змінюється, коли кадр замінено або для нього з'явилась мініатюра — галерея тоді бере новий URL.
@@ -77,8 +79,15 @@ export async function GET(req: Request) {
     // За номером кадру, від нових до старих (не за часом надходження — камера дошлює старі кадри впереміш).
     .sort((a: any, b: any) => compareFilenamesDesc(a.filename, b.filename));
 
+  // Категорії для фільтра в галереї: лише ті, де є фото, у порядку з адмінки.
+  const present = new Set((photos ?? []).map((p: any) => p.category));
+  const galleryCategories = categories
+    .filter((c) => present.has(c.key))
+    .map((c) => ({ key: c.key, label: c.label }));
+
   return NextResponse.json({
     photos: mapped,
+    categories: galleryCategories,
     class: classInfo,
     galleryEnabled,
     downloadEnabled,
