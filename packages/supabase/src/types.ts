@@ -113,10 +113,16 @@ export type Database = {
         Update: { id?: string; category?: string | null; name?: string; price?: number | null; sort_order?: number; created_at?: string };
         Relationships: [];
       };
+      photo_faces: {
+        Row: { id: string; photo_id: string; class_id: string; face_index: number; box: number[]; score: number; embedding: number[] };
+        Insert: { id?: string; photo_id: string; class_id: string; face_index: number; box: number[]; score: number; embedding: number[] };
+        Update: { id?: string; photo_id?: string; class_id?: string; face_index?: number; box?: number[]; score?: number; embedding?: number[] };
+        Relationships: [];
+      };
       photo_categories: {
-        Row: { key: string; label: string; sort_order: number; hidden_from_parents: boolean; is_system: boolean; created_at: string };
+        Row: { key: string; label: string; sort_order: number; hidden_from_parents: boolean; is_system: boolean; created_at: string; auto_faces: "single" | "multi" | null };
         Insert: { key: string; label: string; sort_order?: number; hidden_from_parents?: boolean; is_system?: boolean; created_at?: string };
-        Update: { key?: string; label?: string; sort_order?: number; hidden_from_parents?: boolean; is_system?: boolean; created_at?: string };
+        Update: { key?: string; label?: string; sort_order?: number; hidden_from_parents?: boolean; is_system?: boolean; created_at?: string; auto_faces?: "single" | "multi" | null };
         Relationships: [];
       };
       album_small_run_markups: {
@@ -240,6 +246,7 @@ export type Database = {
           paid_amount: number;
           staff_role: string | null;
           selection_confirmed_at: string | null;
+          face_search_consent_at: string | null;
           first_login_at: string | null;
           access_token: string;
           shoot_time: string | null;
@@ -262,6 +269,7 @@ export type Database = {
           paid_amount?: number;
           staff_role?: string | null;
           selection_confirmed_at?: string | null;
+          face_search_consent_at?: string | null;
           first_login_at?: string | null;
           access_token?: string;
           shoot_time?: string | null;
@@ -284,6 +292,7 @@ export type Database = {
           paid_amount?: number;
           staff_role?: string | null;
           selection_confirmed_at?: string | null;
+          face_search_consent_at?: string | null;
           first_login_at?: string | null;
           access_token?: string;
           shoot_time?: string | null;
@@ -305,6 +314,9 @@ export type Database = {
           student_id: string | null;
           uploaded_at: string;
           file_kind: PhotoFileKind;
+          face_count: number | null;
+          faces_analyzed_at: string | null;
+          faces_sorted_at: string | null;
         };
         Insert: {
           id?: string;
@@ -315,6 +327,9 @@ export type Database = {
           category?: PhotoCategory;
           student_id?: string | null;
           uploaded_at?: string;
+          face_count?: number | null;
+          faces_analyzed_at?: string | null;
+          faces_sorted_at?: string | null;
           file_kind?: PhotoFileKind;
         };
         Update: {
@@ -326,6 +341,9 @@ export type Database = {
           category?: PhotoCategory;
           student_id?: string | null;
           uploaded_at?: string;
+          face_count?: number | null;
+          faces_analyzed_at?: string | null;
+          faces_sorted_at?: string | null;
           file_kind?: PhotoFileKind;
         };
         Relationships: [

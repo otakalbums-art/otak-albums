@@ -9,6 +9,8 @@ export type PhotoCategory = {
   sort_order: number;
   hidden_from_parents: boolean;
   is_system: boolean;
+  /** Автосортування за обличчями: 'single' — фото з 1 обличчям сюди, 'multi' — з 2+. */
+  auto_faces?: "single" | "multi" | null;
 };
 
 export const DEFAULT_PHOTO_CATEGORIES: PhotoCategory[] = [
@@ -21,11 +23,11 @@ export const DEFAULT_PHOTO_CATEGORIES: PhotoCategory[] = [
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function loadPhotoCategories(supabase: any): Promise<PhotoCategory[]> {
-  const { data, error } = await supabase
-    .from("photo_categories")
-    .select("key, label, sort_order, hidden_from_parents, is_system")
-    .order("sort_order")
-    .order("created_at");
+  const query = (cols: string) =>
+    supabase.from("photo_categories").select(cols).order("sort_order").order("created_at");
+  let { data, error } = await query("key, label, sort_order, hidden_from_parents, is_system, auto_faces");
+  // До міграції 0019 колонки auto_faces ще немає — читаємо без неї.
+  if (error) ({ data, error } = await query("key, label, sort_order, hidden_from_parents, is_system"));
   if (error || !data?.length) return DEFAULT_PHOTO_CATEGORIES;
   return data as PhotoCategory[];
 }
@@ -39,4 +41,11 @@ export async function hiddenCategoryKeys(supabase: any): Promise<string[]> {
 /** Для PostgREST-фільтра .not("category", "in", ...) — `("a","b")`. */
 export function inList(keys: string[]) {
   return `(${keys.map((k) => `"${k}"`).join(",")})`;
+}
+
+/** Правила автосортування: { single: "portrait", multi: "group" }. */
+export function faceSortRules(categories: PhotoCategory[]) {
+  const rules: { single?: string; multi?: string } = {};
+  for (const c of categories) if (c.auto_faces) rules[c.auto_faces] = c.key;
+  return rules;
 }

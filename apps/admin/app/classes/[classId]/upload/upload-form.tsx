@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { Button } from "@otak/ui";
 import { createSupabaseBrowserClient } from "@otak/supabase/browser";
+import { FaceSortButton } from "@/lib/face-sort-button";
 
 type Student = { id: string; first_name: string; last_name: string };
 
@@ -267,6 +268,15 @@ export function UploadForm({
             {result.replaced > 0 && <li>Замінено попередні версії: {result.replaced}</li>}
             {result.existed > 0 && <li>Пропущено — вже є на платформі: {result.existed}</li>}
           </ul>
+          {uploaded > 0 && (
+            <div className="mt-2 border-t border-line pt-2">
+              <p className="mb-1.5 text-ink-soft">
+                Сервер сам знайде обличчя на нових фото й розкладе їх (1 дитина / кілька дітей) за правилами з «Категорій
+                фото» — зазвичай за кілька хвилин. Кнопка нижче пересортовує все, що вже проаналізовано.
+              </p>
+              <FaceSortButton classId={classId} compact />
+            </div>
+          )}
           {result.failed.length > 0 && (
             <div className="mt-1.5 text-warn">
               Не вдалося ({result.failed.length}):

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDownWideNarrow, ArrowUpNarrowWide, Check, Download, FolderOpen, Trash2 } from "lucide-react";
 import { createSupabaseBrowserClient } from "@otak/supabase/browser";
 import { CategoryIcon } from "@/lib/photo-categories";
+import { FaceSortButton } from "@/lib/face-sort-button";
 import { compareFilenames, compareFilenamesDesc } from "@otak/supabase/photo-variants";
 
 type Photo = {
@@ -452,6 +453,8 @@ export function PhotosGallery({
           <Download className="h-3.5 w-3.5" /> Тільки RAW
         </a>
       </div>
+
+      <FaceSortButton classId={classId} />
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <button

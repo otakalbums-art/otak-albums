@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import { downloadZip } from "client-zip";
 import { PhotoTile } from "@otak/ui";
 import { redirectToLogin } from "@/lib/session-redirect";
-import { CheckSquare, Download, EyeOff, Heart, X } from "lucide-react";
+import { CheckSquare, Download, EyeOff, Heart, ScanFace, X } from "lucide-react";
+import { FaceSearchButton } from "./face-search";
 
 type Photo = {
   id: string;
@@ -62,6 +63,9 @@ export default function GalleryPage() {
   const [zipError, setZipError] = useState<string | null>(null);
   // Перемикачі адміна для класу: перегляд фото й завантаження JPEG.
   const [access, setAccess] = useState({ gallery: true, download: true });
+  // «Знайти мою дитину»: згода батьків і результат пошуку (id фото дитини).
+  const [faceConsent, setFaceConsent] = useState(false);
+  const [childIds, setChildIds] = useState<Set<string> | null>(null);
 
   function refetch() {
     return fetch("/api/photos")
@@ -92,6 +96,7 @@ export default function GalleryPage() {
           });
         });
         if (data.class) setClassInfo(data.class);
+        setFaceConsent(!!data.faceConsent);
         const next = { gallery: data.galleryEnabled !== false, download: data.downloadEnabled !== false };
         setAccess((prev) => (prev.gallery === next.gallery && prev.download === next.download ? prev : next));
         // Адмін щойно закрив завантаження — виходимо з режиму вибору.
@@ -119,7 +124,15 @@ export default function GalleryPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, [openPhotoId]);
 
-  const visible = filter === "favorites" ? photos.filter((p) => p.is_favorite) : photos;
+  const byFilter = filter === "favorites" ? photos.filter((p) => p.is_favorite) : photos;
+  const visible = childIds ? byFilter.filter((p) => childIds.has(p.id)) : byFilter;
+
+  async function revokeFaceConsent() {
+    if (!confirm("Відкликати згоду на пошук дитини за обличчям?")) return;
+    await fetch("/api/faces/consent", { method: "DELETE" });
+    setFaceConsent(false);
+    setChildIds(null);
+  }
   const openPhoto = photos.find((p) => p.id === openPhotoId) ?? null;
 
   async function toggleFavorite(photoId: string) {
@@ -254,6 +267,22 @@ export default function GalleryPage() {
         </span>
       </div>
 
+      {childIds && (
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-[10px] border border-purple-soft bg-purple-pale px-3 py-2 text-[13px]">
+          <ScanFace className="h-4 w-4 text-purple" />
+          <b className="text-purple-deep">Фото вашої дитини: {visible.length}</b>
+          <button
+            onClick={() => setChildIds(null)}
+            className="ml-auto rounded-[8px] bg-card px-2.5 py-1 text-xs font-semibold text-ink hover:text-purple"
+          >
+            Показати всі фото
+          </button>
+          <span className="w-full text-[11px] text-ink-soft">
+            Знайдено автоматично за обличчям — інколи може показати зайве фото або пропустити потрібне.
+          </span>
+        </div>
+      )}
+
       {selecting && (
         <p className="mb-3 text-xs text-ink-soft">
           Торкніться фото, щоб вибрати їх, і натисніть «Завантажити» внизу — вибрані прийдуть одним ZIP-архівом в
@@ -303,6 +332,14 @@ export default function GalleryPage() {
               завантажити кілька — «Вибрати для завантаження».
             </>
           )}
+        </p>
+      )}
+      {access.gallery && faceConsent && (
+        <p className="mt-2 text-[11px] text-ink-soft">
+          Ви дали згоду на пошук дитини за обличчям.{" "}
+          <button onClick={revokeFaceConsent} className="font-semibold text-purple hover:underline">
+            Відкликати згоду
+          </button>
         </p>
       )}
 
@@ -367,7 +404,7 @@ export default function GalleryPage() {
 
           <div
             onClick={(e) => e.stopPropagation()}
-            className="absolute bottom-6 left-1/2 flex -translate-x-1/2 items-center gap-4 whitespace-nowrap rounded-full bg-black/50 px-4 py-2.5 backdrop-blur-sm"
+            className="absolute bottom-6 left-1/2 flex w-max max-w-[92vw] -translate-x-1/2 flex-wrap items-center justify-center gap-x-4 gap-y-2 whitespace-nowrap rounded-2xl bg-black/50 px-4 py-2.5 backdrop-blur-sm"
           >
             <span className="hidden font-mono text-xs text-white/80 sm:inline">{openPhoto.filename}</span>
             <button
@@ -377,6 +414,19 @@ export default function GalleryPage() {
               <Heart className={`h-4 w-4 ${openPhoto.is_favorite ? "fill-white" : ""}`} />
               {openPhoto.is_favorite ? "В обраному" : "В обране"}
             </button>
+            <FaceSearchButton
+              key={openPhoto.id}
+              photoId={openPhoto.id}
+              imageUrl={openPhoto.previewUrl ?? openPhoto.thumbnailUrl}
+              consent={faceConsent}
+              onConsentGiven={() => setFaceConsent(true)}
+              onResult={(ids) => {
+                setChildIds(new Set(ids));
+                setFilter("all");
+                setOpenPhotoId(null);
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }}
+            />
             {access.download && (
               <a
                 href={`/api/photos/${openPhoto.id}/download`}

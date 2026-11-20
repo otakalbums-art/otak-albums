@@ -11,6 +11,7 @@ type Category = {
   sort_order: number;
   hidden_from_parents: boolean;
   is_system: boolean;
+  auto_faces?: "single" | "multi" | null;
   photoCount: number;
 };
 
@@ -101,7 +102,7 @@ export function CategoriesEditor() {
   return (
     <div className="flex flex-col gap-3">
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[640px] border-collapse text-[13px]">
+        <table className="w-full min-w-[820px] border-collapse text-[13px]">
           <thead>
             <tr className="border-b-[1.5px] border-line text-left text-[11px] font-bold text-ink-soft">
               <th className="w-[70px] py-2">Порядок</th>
@@ -110,6 +111,12 @@ export function CategoriesEditor() {
                 Папка для камери
               </th>
               <th className="py-2">Фото</th>
+              <th
+                className="py-2"
+                title="Сервер сам знаходить обличчя на кожному новому фото: кадри з однією дитиною йдуть у категорію з правилом «1 обличчя», з кількома — у «2+ облич»"
+              >
+                Автосортування за обличчями
+              </th>
               <th className="py-2" title="Фото цієї категорії не бачать батьки: ні в галереї, ні в обраному, ні для альбому">
                 Приховати від батьків
               </th>
@@ -155,6 +162,33 @@ export function CategoriesEditor() {
                   {c.key === "uncategorized" ? "/ (не вказувати)" : `/${c.key}`}
                 </td>
                 <td className="py-2 pr-3">{c.photoCount}</td>
+                <td className="py-2 pr-3">
+                  {c.key === "personal" ? (
+                    <span className="text-[11px] text-ink-soft">—</span>
+                  ) : (
+                    <select
+                      value={c.auto_faces ?? ""}
+                      disabled={busy}
+                      onChange={(e) =>
+                        call(
+                          `/api/photo-categories/${c.key}`,
+                          "PATCH",
+                          { autoFaces: e.target.value || null },
+                          e.target.value
+                            ? `«${c.label}»: сюди йдуть фото з ${e.target.value === "single" ? "однією дитиною" : "кількома дітьми"}`
+                            : `«${c.label}»: без автосортування`
+                        )
+                      }
+                      className={`rounded-[8px] border px-2 py-1 text-[12px] outline-none focus:border-purple ${
+                        c.auto_faces ? "border-purple bg-purple-pale font-semibold text-purple-deep" : "border-line"
+                      }`}
+                    >
+                      <option value="">—</option>
+                      <option value="single">1 обличчя (портрет)</option>
+                      <option value="multi">2+ облич (групове)</option>
+                    </select>
+                  )}
+                </td>
                 <td className="py-2 pr-3">
                   <span className="inline-flex items-center gap-1.5">
                     <Toggle
@@ -219,6 +253,13 @@ export function CategoriesEditor() {
         Назву можна змінювати будь-коли — вона одразу оновиться в адмінці й у батьків. «Папка для камери» створюється з
         назви при додаванні й більше не змінюється (її вказують у налаштуваннях камери). Порядок тут — це порядок кнопок
         у галереї, у формі завантаження й карток камер на сторінці «Прийом з камер».
+      </p>
+      <p className="text-[11.5px] text-ink-soft">
+        <b>Автосортування за обличчями:</b> сервер знаходить обличчя на кожному новому фото (з камери й завантаженому
+        вручну) і кладе кадр з однією дитиною в категорію з правилом «1 обличчя», а з кількома — у «2+ облич». Сортуються
+        лише фото з цих двох категорій і з «Без категорії» — свідомо обрані фотографом категорії (церемонія, персональні…)
+        не чіпаються. RAW переїжджає разом зі своїм JPEG. Кожне правило може мати лише одна категорія — вибір нової
+        знімає його з попередньої.
       </p>
     </div>
   );

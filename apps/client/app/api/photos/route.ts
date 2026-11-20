@@ -21,7 +21,7 @@ export async function GET(req: Request) {
   const supabase = createSupabaseServiceRoleClient();
   const { data: student } = await supabase
     .from("students")
-    .select("id, class_id, classes(name, parent_gallery_enabled, parent_download_enabled, schools(name))")
+    .select("id, class_id, face_search_consent_at, classes(name, parent_gallery_enabled, parent_download_enabled, schools(name))")
     .eq("session_token", sessionToken)
     .single();
 
@@ -77,5 +77,12 @@ export async function GET(req: Request) {
     // За номером кадру, від нових до старих (не за часом надходження — камера дошлює старі кадри впереміш).
     .sort((a: any, b: any) => compareFilenamesDesc(a.filename, b.filename));
 
-  return NextResponse.json({ photos: mapped, class: classInfo, galleryEnabled, downloadEnabled });
+  return NextResponse.json({
+    photos: mapped,
+    class: classInfo,
+    galleryEnabled,
+    downloadEnabled,
+    // Згода батьків на пошук дитини за обличчям (0019_faces.sql).
+    faceConsent: !!(student as any).face_search_consent_at,
+  });
 }

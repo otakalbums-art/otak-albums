@@ -11,7 +11,8 @@
     "./cabinet": "./src/cabinet.ts",
     "./photo-variants": "./src/photo-variants.ts",
     "./photo-categories": "./src/photo-categories.ts",
-    "./paginate": "./src/paginate.ts"
+    "./paginate": "./src/paginate.ts",
+    "./faces": "./src/faces.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",

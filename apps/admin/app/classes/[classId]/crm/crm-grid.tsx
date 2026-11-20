@@ -5,7 +5,7 @@ import { PhotoPicker } from "./photo-picker";
 import { DualScroll } from "@otak/ui";
 import { LinksMessage } from "./links-message";
 import { AlbumPhotosDownload } from "./album-photos-download";
-import { Camera, Check, Clock, FileText, Gift, Link2, Plus, ShoppingBag, X } from "lucide-react";
+import { Camera, Check, Clock, FileText, Gift, Link2, Plus, ScanFace, ShoppingBag, X } from "lucide-react";
 import { createSupabaseBrowserClient } from "@otak/supabase/browser";
 import { classChannel, groupForTime, type Question, type TimeGroup } from "@otak/supabase/cabinet";
 
@@ -38,6 +38,7 @@ type Student = {
   paid_amount: number;
   selection_confirmed_at: string | null;
   access_token: string;
+  face_search_consent_at?: string | null;
   shoot_time: string | null;
   deposit_amount: number | null;
   extra_payment_amount: number | null;
@@ -739,6 +740,14 @@ export function CrmGrid({ classId, title, shootDate }: { classId: string; title:
                   </span>
                 )}
                 <PersonalLinkButton token={student.access_token} />
+                {student.face_search_consent_at && (
+                  <span
+                    title={`Батьки погодились на пошук дитини за обличчям ${new Date(student.face_search_consent_at).toLocaleString("uk-UA")}`}
+                    className="ml-1 inline-flex items-center gap-0.5 rounded-full bg-[#E7F7EE] px-1.5 py-0.5 align-middle text-[10px] font-bold text-ok"
+                  >
+                    <ScanFace className="h-3 w-3" /> згода
+                  </span>
+                )}
               </td>
               {hasSlots && (
               <td className="whitespace-nowrap pr-5">

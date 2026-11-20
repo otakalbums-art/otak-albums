@@ -42,7 +42,7 @@ export async function GET(_req: Request, { params }: { params: { classId: string
   const { data: students } = await service
     .from("students")
     .select(
-      "id, first_name, last_name, is_staff, staff_role, order_status, order_amount, paid_amount, selection_confirmed_at, access_token, shoot_time, deposit_amount, extra_payment_amount"
+      "id, first_name, last_name, is_staff, staff_role, order_status, order_amount, paid_amount, selection_confirmed_at, face_search_consent_at, access_token, shoot_time, deposit_amount, extra_payment_amount"
     )
     .eq("class_id", params.classId)
     .order("is_staff")
@@ -143,6 +143,7 @@ export async function GET(_req: Request, { params }: { params: { classId: string
     order_amount: s.order_amount,
     paid_amount: s.paid_amount,
     selection_confirmed_at: s.selection_confirmed_at,
+    face_search_consent_at: s.face_search_consent_at,
     access_token: s.access_token,
     shoot_time: s.shoot_time ? String(s.shoot_time).slice(0, 5) : null,
     deposit_amount: s.deposit_amount,
