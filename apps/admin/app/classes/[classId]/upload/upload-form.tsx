@@ -22,10 +22,18 @@ type Prepared = {
   category?: string;
   studentId?: string | null;
   paired?: boolean;
+  exists?: boolean;
   error?: string;
 };
 
-type Result = { jpeg: number; rawPaired: number; rawAlone: number; replaced: number; failed: { filename: string; reason: string }[] };
+type Result = {
+  jpeg: number;
+  rawPaired: number;
+  rawAlone: number;
+  replaced: number;
+  existed: number;
+  failed: { filename: string; reason: string }[];
+};
 
 const BATCH = 25; // скільки посилань просимо за раз
 const PARALLEL = 3; // скільки файлів вантажимо одночасно
@@ -39,6 +47,8 @@ const PARALLEL = 3; // скільки файлів вантажимо одноч
 export function UploadForm({ classId, students }: { classId: string; students: Student[] }) {
   const [category, setCategory] = useState("uncategorized");
   const [studentId, setStudentId] = useState("");
+  // Лише файли, яких на платформі ще немає (для дозавантаження загублених кадрів).
+  const [onlyNew, setOnlyNew] = useState(true);
   const [files, setFiles] = useState<File[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [status, setStatus] = useState<"idle" | "uploading" | "done">("idle");
@@ -48,7 +58,11 @@ export function UploadForm({ classId, students }: { classId: string; students: S
 
   function addFiles(list: FileList | null) {
     if (!list) return;
-    setFiles((prev) => [...prev, ...Array.from(list)]);
+    // Той самий файл, обраний двічі, не дублюємо.
+    setFiles((prev) => {
+      const seen = new Set(prev.map((f) => f.name.toLowerCase()));
+      return [...prev, ...Array.from(list).filter((f) => !seen.has(f.name.toLowerCase()) && seen.add(f.name.toLowerCase()))];
+    });
   }
 
   async function handleUpload() {
@@ -59,13 +73,17 @@ export function UploadForm({ classId, students }: { classId: string; students: S
     }
 
     const supabase = createSupabaseBrowserClient();
-    const res: Result = { jpeg: 0, rawPaired: 0, rawAlone: 0, replaced: 0, failed: [] };
+    const res: Result = { jpeg: 0, rawPaired: 0, rawAlone: 0, replaced: 0, existed: 0, failed: [] };
     const queue = [...files];
     setStatus("uploading");
     setResult(null);
     setProgress({ done: 0, total: queue.length });
 
     async function uploadOne(file: File, prep: Prepared) {
+      if (prep.exists) {
+        res.existed++;
+        return;
+      }
       if (prep.error || !prep.path || !prep.token) {
         res.failed.push({ filename: file.name, reason: prep.error ?? "не вдалося підготувати" });
         return;
@@ -101,7 +119,13 @@ export function UploadForm({ classId, students }: { classId: string; students: S
       const batch = queue.splice(0, BATCH);
       const urls = await fetch("/api/photos/upload-urls", {
         method: "POST",
-        body: JSON.stringify({ classId, category, studentId: category === "personal" ? studentId : null, files: batch.map((f) => f.name) }),
+        body: JSON.stringify({
+          classId,
+          category,
+          studentId: category === "personal" ? studentId : null,
+          files: batch.map((f) => f.name),
+          onlyNew,
+        }),
       });
       const { items, error } = await urls.json().catch(() => ({ items: null, error: "помилка сервера" }));
       if (!urls.ok || !items) {
@@ -144,7 +168,8 @@ export function UploadForm({ classId, students }: { classId: string; students: S
             ))}
           </select>
           <p className="mt-1 text-[11px] text-ink-soft">
-            RAW, для яких уже є JPEG з такою ж назвою, автоматично стануть у пару й отримають категорію свого JPEG.
+            Файл, для якого на платформі вже є пара (RAW ↔ JPEG з такою ж назвою), сам отримає її категорію й стане
+            з нею однією плиткою.
           </p>
         </div>
         {category === "personal" && (
@@ -165,6 +190,17 @@ export function UploadForm({ classId, students }: { classId: string; students: S
           </div>
         )}
       </div>
+
+      <label className="flex cursor-pointer items-start gap-2.5 rounded-[10px] border border-line bg-page p-3">
+        <input type="checkbox" checked={onlyNew} onChange={(e) => setOnlyNew(e.target.checked)} className="mt-0.5 h-4 w-4 accent-purple" />
+        <span className="text-xs">
+          <b>Лише нові файли</b> — пропускати ті, що вже є на платформі (за назвою файлу). Зручно, щоб дозавантажити
+          загублені кадри: оберіть усю картку — прийдуть тільки ті, яких бракує.
+          <span className="block text-ink-soft">
+            Вимкніть, якщо треба навмисно замінити вже завантажені кадри новими версіями.
+          </span>
+        </span>
+      </label>
 
       <div
         onDragOver={(e) => {
@@ -221,12 +257,13 @@ export function UploadForm({ classId, students }: { classId: string; students: S
 
       {result && (
         <div className="rounded-[9px] border border-line p-3 text-xs">
-          <p className="font-semibold text-ok">Завантажено: {uploaded}</p>
+          <p className="font-semibold text-ok">Завантажено нових: {uploaded}</p>
           <ul className="ml-4 mt-1 list-disc text-ink-soft">
             {result.jpeg > 0 && <li>JPEG: {result.jpeg}</li>}
             {result.rawPaired > 0 && <li>RAW у парі зі своїм JPEG: {result.rawPaired}</li>}
             {result.rawAlone > 0 && <li>RAW без JPEG (лягли в обрану категорію): {result.rawAlone}</li>}
             {result.replaced > 0 && <li>Замінено попередні версії: {result.replaced}</li>}
+            {result.existed > 0 && <li>Пропущено — вже є на платформі: {result.existed}</li>}
           </ul>
           {result.failed.length > 0 && (
             <div className="mt-1.5 text-warn">
