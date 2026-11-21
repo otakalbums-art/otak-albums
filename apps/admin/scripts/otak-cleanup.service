@@ -1,0 +1,11 @@
+# Очищення локальних копій уже вивантажених фото (scripts/cleanup-ingested.py).
+# Запускається таймером otak-cleanup.timer щодня о 23:00 за Києвом.
+[Unit]
+Description=Otak Albums: delete local copies of photos already in Supabase
+
+[Service]
+Type=oneshot
+User=otakftp
+WorkingDirectory=/opt/otak-ftp
+ExecStart=/usr/bin/python3 -u /opt/otak-ftp/scripts/cleanup-ingested.py
+Nice=10

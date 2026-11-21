@@ -1,0 +1,11 @@
+# Щодня о 23:00 за Києвом (сервер у UTC — часовий пояс указано явно).
+# Встановлення: cp otak-cleanup.* /etc/systemd/system/ && systemctl enable --now otak-cleanup.timer
+[Unit]
+Description=Daily cleanup of ingested photo copies at 23:00 Kyiv time
+
+[Timer]
+OnCalendar=*-*-* 23:00:00 Europe/Kyiv
+Persistent=true
+
+[Install]
+WantedBy=timers.target
