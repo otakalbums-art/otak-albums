@@ -70,6 +70,15 @@ function globToRegExp(glob) {
   return new RegExp(`^${escaped}$`, "i");
 }
 class GlobAwareFileSystem extends FileSystem {
+  write(fileName, options) {
+    // Режим «лише JPEG»: RAW відхиляємо ще до передачі даних (ftp-srv відповість 550).
+    if (jpegOnly && !/\.jpe?g$/i.test(fileName)) {
+      rawRejected++;
+      if (rawRejected <= 5 || rawRejected % 50 === 0) log(`[ftp] режим «лише JPEG»: відхилено ${fileName} (усього ${rawRejected})`);
+      return Promise.reject(new Error("RAW disabled: JPEG only"));
+    }
+    return super.write(fileName, options);
+  }
   get(fileName) {
     if (GLOB_CHARS.test(fileName)) {
       // "Директорія" тут фіктивна — важливо лише isDirectory() === true, щоб
@@ -215,15 +224,30 @@ fs.mkdirSync(DROP_ROOT, { recursive: true });
 const CONTROL_SECRET = process.env.FTP_CONTROL_SECRET;
 const STATE_FILE = path.join(ADMIN_ROOT, "state.json");
 let enabled = !CONTROL_SECRET;
+// Експериментальний режим «лише JPEG»: RAW від камери відхиляються одразу
+// (до передачі даних), щоб камера не витрачала час на ~25 МБ RAW. Вмикається
+// й вимикається на льоту через control-сервер (/jpeg-only/on|off), без
+// перезапуску — щоб можна було миттєво відкотити, якщо камера «застрягне».
+let jpegOnly = false;
 try {
-  enabled = !!JSON.parse(fs.readFileSync(STATE_FILE, "utf8")).enabled;
+  const saved = JSON.parse(fs.readFileSync(STATE_FILE, "utf8"));
+  enabled = !!saved.enabled;
+  jpegOnly = !!saved.jpegOnly;
 } catch {
   // Першого разу файлу ще нема — лишаємось на дефолті за режимом вище.
 }
+function saveState() {
+  fs.writeFileSync(STATE_FILE, JSON.stringify({ enabled, jpegOnly }));
+}
 function setEnabled(next) {
   enabled = next;
-  fs.writeFileSync(STATE_FILE, JSON.stringify({ enabled }));
+  saveState();
 }
+function setJpegOnly(next) {
+  jpegOnly = next;
+  saveState();
+}
+let rawRejected = 0;
 
 const START_TIME = Date.now();
 const MAX_LOG_LINES = 100;
@@ -525,6 +549,8 @@ const controlServer = http.createServer((req, res) => {
   if (req.method === "GET" && req.url === "/status") {
     return sendJson(res, 200, {
       running: enabled,
+      jpegOnly,
+      rawRejected,
       startedAt: START_TIME,
       logs: recentLogs.slice(-50),
       host: primaryIp,
@@ -540,6 +566,12 @@ const controlServer = http.createServer((req, res) => {
     setEnabled(false);
     log("[control] прийом вимкнено з адмінки");
     return sendJson(res, 200, { ok: true, running: false });
+  }
+  if (req.method === "POST" && (req.url === "/jpeg-only/on" || req.url === "/jpeg-only/off")) {
+    setJpegOnly(req.url.endsWith("/on"));
+    rawRejected = 0;
+    log(`[control] режим «лише JPEG» ${jpegOnly ? "УВІМКНЕНО" : "вимкнено"}`);
+    return sendJson(res, 200, { ok: true, jpegOnly });
   }
   sendJson(res, 404, { error: "not found" });
 });
