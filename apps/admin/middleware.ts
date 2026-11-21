@@ -104,5 +104,5 @@ export const config = {
   // без цього middleware редіректив їх на /login разом з рештою сторінок,
   // тож лого й фавікон були б биті саме на самій /login (де сесії ще нема).
   // api/cron — виклики Vercel Cron без сесії (роут сам перевіряє CRON_SECRET).
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/cron/|.*\\.(?:png|jpg|jpeg|gif|svg|webp|ico)$).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/cron/|.*\\.(?:png|jpg|jpeg|gif|svg|webp|ico|mjs)$).*)"],
 };

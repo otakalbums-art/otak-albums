@@ -5,6 +5,7 @@ import { PhotoPicker } from "./photo-picker";
 import { DualScroll } from "@otak/ui";
 import { LinksMessage } from "./links-message";
 import { AlbumPhotosDownload } from "./album-photos-download";
+import { ImportStudents } from "./import-students";
 import { Camera, Check, Clock, FileText, Gift, Link2, Plus, ScanFace, ShoppingBag, X } from "lucide-react";
 import { createSupabaseBrowserClient } from "@otak/supabase/browser";
 import { classChannel, groupForTime, type Question, type TimeGroup } from "@otak/supabase/cabinet";
@@ -680,6 +681,16 @@ export function CrmGrid({ classId, title, shootDate }: { classId: string; title:
     <div>
       <LinksMessage students={students} timeGroups={timeGroups} title={title} shootDate={shootDate} />
       {slots.some((s) => s.kind === "photo") && <AlbumPhotosDownload classId={classId} />}
+      <ImportStudents
+        classId={classId}
+        hasTimeGroups={timeGroups.length > 0}
+        hasShootDate={!!shootDate}
+        onDone={async (settingsChanged) => {
+          // Нові часові групи/дата показуються в панелі налаштувань — перечитуємо сторінку.
+          if (settingsChanged) window.location.reload();
+          else await refetch();
+        }}
+      />
       <DualScroll>
       <table className="min-w-max border-collapse text-[13px]">
         <thead>
