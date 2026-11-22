@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Card, Toggle } from "@otak/ui";
 import { AlertTriangle, Camera, Check, Copy, Loader2 } from "lucide-react";
 import { CategoryIcon } from "@/lib/photo-categories";
+import { TransferProgress, type TransferStats } from "./transfer-progress";
 
 type ClassOption = { id: string; name: string; schoolName: string };
 type Creds = { username: string; password: string };
@@ -63,6 +64,7 @@ export function FtpControlPanel({
     unavailable?: boolean;
     unavailableReason?: "not_configured" | "vm_unreachable";
     mode?: "local" | "cloud";
+    transfer?: TransferStats | null;
   } | null>(null);
   const [busy, setBusy] = useState(false);
   const [toggleError, setToggleError] = useState<string | null>(null);
@@ -216,6 +218,8 @@ export function FtpControlPanel({
             Натисни перемикач, щоб увімкнути прийом — тоді камери зможуть підключатись.
           </p>
         )}
+
+        {status?.running && <TransferProgress stats={status.transfer} />}
 
         {status && status.logs.length > 0 && (
           <details className="mt-3">

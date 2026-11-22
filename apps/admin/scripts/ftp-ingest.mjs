@@ -69,7 +69,73 @@ function globToRegExp(glob) {
   const escaped = glob.replace(/[.+^${}()|\\]/g, "\\$&").replace(/\*/g, ".*").replace(/\?/g, ".");
   return new RegExp(`^${escaped}$`, "i");
 }
+// --- живий прогрес прийому для адмінки (/status -> transfer) ---
+// Скільки байтів камера вже передала по кожному файлу, швидкість за останні
+// секунди, прийняті файли за годину, середній розмір JPEG/RAW (для оцінки %).
+const activeTransfers = new Map(); // id -> { file, kind, bytes, startedAt }
+const byteSamples = []; // [timestamp, bytes] — для швидкості
+const receivedLog = []; // { at, bytes, kind } — завершені передачі за останню годину
+const avgSize = { jpeg: 4_000_000, raw: 25_000_000 };
+let transferSeq = 0;
+function fileKind(name) {
+  return /\.jpe?g$/i.test(name) ? "jpeg" : "raw";
+}
+function transferStats() {
+  const now = Date.now();
+  while (byteSamples.length && now - byteSamples[0][0] > 10_000) byteSamples.shift();
+  while (receivedLog.length && now - receivedLog[0].at > 3_600_000) receivedLog.shift();
+  const window = byteSamples.length ? Math.max(1, (now - byteSamples[0][0]) / 1000) : 1;
+  const speedBps = Math.round(byteSamples.reduce((s, [, b]) => s + b, 0) / Math.max(window, 3));
+  const lastHour = receivedLog.reduce(
+    (acc, r) => ({ ...acc, [r.kind]: acc[r.kind] + 1, bytes: acc.bytes + r.bytes }),
+    { jpeg: 0, raw: 0, bytes: 0 }
+  );
+  return {
+    active: [...activeTransfers.values()].map((t) => ({
+      file: t.file,
+      kind: t.kind,
+      bytes: t.bytes,
+      expected: avgSize[t.kind],
+      seconds: Math.round((now - t.startedAt) / 1000),
+    })),
+    speedBps,
+    lastHour,
+    lastReceivedAt: receivedLog.length ? receivedLog[receivedLog.length - 1].at : null,
+    queue: { jpeg: jpegQueue.length, raw: rawQueue.length, uploading: jpegActive + (rawActive ? 1 : 0) },
+  };
+}
+
 class GlobAwareFileSystem extends FileSystem {
+  async write(fileName, options) {
+    const res = await super.write(fileName, options);
+    const stream = res?.stream ?? res;
+    if (stream && typeof stream.write === "function") {
+      const id = ++transferSeq;
+      const t = { file: path.basename(fileName), kind: fileKind(fileName), bytes: 0, startedAt: Date.now() };
+      activeTransfers.set(id, t);
+      const original = stream.write.bind(stream);
+      stream.write = (chunk, ...rest) => {
+        const n = chunk?.length ?? 0;
+        t.bytes += n;
+        byteSamples.push([Date.now(), n]);
+        return original(chunk, ...rest);
+      };
+      let done = false;
+      const finish = (ok) => {
+        if (done) return;
+        done = true;
+        activeTransfers.delete(id);
+        if (ok && t.bytes > 0) {
+          receivedLog.push({ at: Date.now(), bytes: t.bytes, kind: t.kind });
+          avgSize[t.kind] = Math.round(avgSize[t.kind] * 0.8 + t.bytes * 0.2);
+        }
+      };
+      stream.once("finish", () => finish(true));
+      stream.once("error", () => finish(false));
+      stream.once("close", () => finish(false));
+    }
+    return res;
+  }
   get(fileName) {
     if (GLOB_CHARS.test(fileName)) {
       // "Директорія" тут фіктивна — важливо лише isDirectory() === true, щоб
@@ -525,6 +591,7 @@ const controlServer = http.createServer((req, res) => {
   if (req.method === "GET" && req.url === "/status") {
     return sendJson(res, 200, {
       running: enabled,
+      transfer: transferStats(),
       startedAt: START_TIME,
       logs: recentLogs.slice(-50),
       host: primaryIp,

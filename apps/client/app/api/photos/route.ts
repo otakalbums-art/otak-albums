@@ -59,9 +59,12 @@ export async function GET(req: Request) {
   const paths = (photos ?? []).map((p: any) => p.storage_path);
   // Сітка — мініатюра (~480 px, десятки КБ), перегляд на весь екран — preview
   // (~1600 px); оригінали по 3–4 МБ галерея більше не тягне (photo-variants.ts).
+  // Завантаження вимкнено адміном — віддаємо ЛИШЕ мініатюру (~480 px) і для
+  // сітки, і для перегляду на весь екран: якісну копію не підписуємо взагалі,
+  // тож і скриншот, і «витягнути» файл дадуть тільки маленьке розмите фото.
   const [thumbByPath, previewByPath] = await Promise.all([
     signPhotoUrls(supabase, paths, "thumb"),
-    signPhotoUrls(supabase, paths, "preview"),
+    downloadEnabled ? signPhotoUrls(supabase, paths, "preview") : Promise.resolve(null),
   ]);
 
   const mapped = (photos ?? [])
@@ -70,9 +73,9 @@ export async function GET(req: Request) {
       filename: p.filename,
       category: p.category,
       thumbnailUrl: thumbByPath.get(p.storage_path),
-      previewUrl: previewByPath.get(p.storage_path),
+      previewUrl: (previewByPath ?? thumbByPath).get(p.storage_path),
       // Змінюється, коли кадр замінено або для нього з'явилась мініатюра — галерея тоді бере новий URL.
-      version: `${p.storage_path}|${thumbByPath.get(p.storage_path)?.includes("/THUMB/") ? "t" : "o"}`,
+      version: `${p.storage_path}|${thumbByPath.get(p.storage_path)?.includes("/THUMB/") ? "t" : "o"}|${downloadEnabled ? "d" : "v"}`,
       is_favorite: p.favorites?.some((f: any) => f.student_id === student.id),
     }))
     .filter((p: any) => !favoritesOnly || p.is_favorite)

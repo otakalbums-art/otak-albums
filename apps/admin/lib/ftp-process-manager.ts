@@ -51,7 +51,8 @@ function isAlive() {
 }
 
 // --- проксі на VM-приймач (хмарний режим) ---
-type VmStatus = { running: boolean; startedAt: number; logs: string[]; host: string; port: number };
+// transfer — живий прогрес прийому (scripts/ftp-ingest.mjs → transferStats()); у старих версіях приймача його немає.
+type VmStatus = { running: boolean; startedAt: number; logs: string[]; host: string; port: number; transfer?: unknown };
 
 function vmConfig() {
   // .trim() — Vercel's env var UI happily stores a copy-pasted trailing
@@ -107,6 +108,8 @@ export async function ftpStatus() {
     const s = await vmRequest("/status", "GET");
     return {
       running: s?.running ?? false,
+      // Живий прогрес прийому з камери (scripts/ftp-ingest.mjs → transferStats()).
+      transfer: s?.transfer ?? null,
       startedAt: s?.startedAt ?? null,
       logs: s?.logs ?? [],
       unavailable: s === null,
