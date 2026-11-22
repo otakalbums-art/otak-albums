@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Створює мініатюри/preview для JPEG-фото, у яких їх ще немає (фото, що
- * прийшли до появи версій). Безпечно запускати повторно — наявні пропускає.
+ * Створює відсутні зменшені версії (thumb / preview / tiny) для JPEG-фото
+ * (фото, що прийшли до появи версій). Безпечно запускати повторно — наявні пропускає.
  *
  *   node scripts/backfill-variants.mjs            # усі класи
  *   node scripts/backfill-variants.mjs <classId>  # один клас
@@ -13,7 +13,7 @@ import { createClient } from "@supabase/supabase-js";
 import { fileURLToPath } from "url";
 import path from "path";
 import fs from "fs";
-import { uploadVariants, variantPath } from "./photo-variants.mjs";
+import { VARIANT_SPECS, uploadVariants, variantPath } from "./photo-variants.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 for (const line of fs.existsSync(path.join(ROOT, ".env.local")) ? fs.readFileSync(path.join(ROOT, ".env.local"), "utf8").split(/\r?\n/) : []) {
@@ -40,16 +40,19 @@ async function allJpegs() {
   return rows.map((r) => r.storage_path);
 }
 
-/** Оригінали, у яких бракує thumb або preview (перевірка одним пакетним підписом). */
+const ALL = Object.keys(VARIANT_SPECS);
+
+/** Для кожного оригіналу — яких версій бракує (перевірка пакетним підписом). */
 async function missing(paths) {
   const out = [];
-  for (let i = 0; i < paths.length; i += 500) {
-    const chunk = paths.slice(i, i + 500);
-    const targets = chunk.flatMap((p) => [variantPath(p, "thumb"), variantPath(p, "preview")]);
+  for (let i = 0; i < paths.length; i += 300) {
+    const chunk = paths.slice(i, i + 300);
+    const targets = chunk.flatMap((p) => ALL.map((v) => variantPath(p, v))).filter(Boolean);
     const { data } = await supabase.storage.from("photos").createSignedUrls(targets, 60);
     const ok = new Set((data ?? []).filter((d) => d.signedUrl).map((d) => d.path));
     for (const p of chunk) {
-      if (!ok.has(variantPath(p, "thumb")) || !ok.has(variantPath(p, "preview"))) out.push(p);
+      const lack = ALL.filter((v) => variantPath(p, v) && !ok.has(variantPath(p, v)));
+      if (lack.length) out.push({ path: p, lack });
     }
   }
   return out;
@@ -57,23 +60,26 @@ async function missing(paths) {
 
 const started = Date.now();
 const todo = await missing(await allJpegs());
-console.log(`Без мініатюр: ${todo.length}`);
+console.log(`Фото, яким бракує версій: ${todo.length}`);
 
 let done = 0;
 let failed = 0;
 async function worker() {
   while (todo.length) {
-    const p = todo.shift();
-    const { data: blob, error } = await supabase.storage.from("photos").download(p);
+    const { path: p, lack } = todo.shift();
+    // Бракує лише tiny — робимо її з готової мініатюри (кілька КБ замість ~4 МБ оригіналу).
+    const source = lack.length === 1 && lack[0] === "tiny" ? variantPath(p, "thumb") : p;
+    let { data: blob, error } = await supabase.storage.from("photos").download(source);
+    if ((error || !blob) && source !== p) ({ data: blob, error } = await supabase.storage.from("photos").download(p));
     if (error || !blob) {
       failed++;
       console.log(`✗ не вдалось завантажити ${p}: ${error?.message}`);
       continue;
     }
-    const made = await uploadVariants(supabase, p, Buffer.from(await blob.arrayBuffer()));
-    if (made === 2) done++;
+    const made = await uploadVariants(supabase, p, Buffer.from(await blob.arrayBuffer()), console.log, lack);
+    if (made === lack.length) done++;
     else failed++;
-    if ((done + failed) % 25 === 0) console.log(`… ${done + failed} оброблено (${Math.round((Date.now() - started) / 1000)} с)`);
+    if ((done + failed) % 50 === 0) console.log(`… ${done + failed} оброблено (${Math.round((Date.now() - started) / 1000)} с)`);
   }
 }
 await Promise.all(Array.from({ length: CONCURRENCY }, worker));

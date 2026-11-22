@@ -55,7 +55,9 @@ export function PhotoTile({
       onClick={onOpen}
       onContextMenu={(e) => e.preventDefault()}
       onDragStart={(e) => e.preventDefault()}
-      className="relative aspect-[4/5] cursor-pointer select-none overflow-hidden rounded-[11px] border border-line bg-gradient-to-br from-purple-pale to-purple-soft [-webkit-touch-callout:none]"
+      className={`relative aspect-[4/5] select-none overflow-hidden rounded-[11px] border border-line bg-gradient-to-br from-purple-pale to-purple-soft [-webkit-touch-callout:none] ${
+        onOpen ? "cursor-pointer" : ""
+      }`}
       style={visible && thumbnailUrl ? { backgroundImage: `url(${thumbnailUrl})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}
     >
       {onToggleSelect ? (

@@ -59,13 +59,15 @@ export async function GET(req: Request) {
   const paths = (photos ?? []).map((p: any) => p.storage_path);
   // Сітка — мініатюра (~480 px, десятки КБ), перегляд на весь екран — preview
   // (~1600 px); оригінали по 3–4 МБ галерея більше не тягне (photo-variants.ts).
-  // Завантаження вимкнено адміном — віддаємо ЛИШЕ мініатюру (~480 px) і для
-  // сітки, і для перегляду на весь екран: якісну копію не підписуємо взагалі,
-  // тож і скриншот, і «витягнути» файл дадуть тільки маленьке розмите фото.
+  // Завантаження вимкнено адміном — віддаємо ЛИШЕ крихітну копію (~160 px,
+  // TINY; без неї — thumb, але ніколи не оригінал), а перегляд на весь екран
+  // у галереї вимкнено: якісних копій не підписуємо взагалі, тож і скриншот,
+  // і «витягнути» файл дадуть тільки маленьке розмите фото.
   const [thumbByPath, previewByPath] = await Promise.all([
-    signPhotoUrls(supabase, paths, "thumb"),
+    signPhotoUrls(supabase, paths, downloadEnabled ? "thumb" : "tiny"),
     downloadEnabled ? signPhotoUrls(supabase, paths, "preview") : Promise.resolve(null),
   ]);
+  const sizeMark = (url?: string) => (url?.includes("/TINY/") ? "y" : url?.includes("/THUMB/") ? "t" : "o");
 
   const mapped = (photos ?? [])
     .map((p: any) => ({
@@ -73,9 +75,9 @@ export async function GET(req: Request) {
       filename: p.filename,
       category: p.category,
       thumbnailUrl: thumbByPath.get(p.storage_path),
-      previewUrl: (previewByPath ?? thumbByPath).get(p.storage_path),
+      previewUrl: previewByPath?.get(p.storage_path),
       // Змінюється, коли кадр замінено або для нього з'явилась мініатюра — галерея тоді бере новий URL.
-      version: `${p.storage_path}|${thumbByPath.get(p.storage_path)?.includes("/THUMB/") ? "t" : "o"}|${downloadEnabled ? "d" : "v"}`,
+      version: `${p.storage_path}|${sizeMark(thumbByPath.get(p.storage_path))}|${downloadEnabled ? "d" : "v"}`,
       is_favorite: p.favorites?.some((f: any) => f.student_id === student.id),
     }))
     .filter((p: any) => !favoritesOnly || p.is_favorite)

@@ -108,6 +108,7 @@ export default function GalleryPage() {
         if (!next.download) {
           setSelecting(false);
           setSelected(new Set());
+          setOpenPhotoId(null);
         }
         setIsLive(true);
       })
@@ -333,7 +334,10 @@ export default function GalleryPage() {
             onToggleFavorite={() => toggleFavorite(photo.id)}
             isSelected={selected.has(photo.id)}
             onToggleSelect={selecting ? () => toggleSelected(photo.id) : undefined}
-            onOpen={() => (selecting ? toggleSelected(photo.id) : setOpenPhotoId(photo.id))}
+            // Завантаження вимкнено адміном — на весь екран фото не відкривається (лише крихітна копія в сітці).
+            onOpen={
+              selecting ? () => toggleSelected(photo.id) : access.download ? () => setOpenPhotoId(photo.id) : undefined
+            }
             downloadHref={selecting || !access.download ? undefined : `/api/photos/${photo.id}/download`}
           />
         ))}

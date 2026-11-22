@@ -4,6 +4,8 @@
  *   оригінал: {class}/{category}/JPEG/{uuid}-{name}.JPG     (повний розмір, для CRM/архіву/друку)
  *   thumb:    {class}/{category}/THUMB/{uuid}-{name}.webp   (~480 px, сітка галереї)
  *   preview:  {class}/{category}/PREVIEW/{uuid}-{name}.webp (~1600 px, перегляд на весь екран)
+ *   tiny:     {class}/{category}/TINY/{uuid}-{name}.webp    (~160 px, галерея батьків, коли
+ *             завантаження вимкнено адміном — щоб скриншот був непридатний)
  *
  * Шлях версії виводиться з шляху оригіналу — окремих колонок у БД не треба.
  * Якщо версії ще немає (старе фото до backfill), підписуємо оригінал.
@@ -12,11 +14,12 @@
  * (apps/admin/app/api/photos/upload) і backfill-скрипт.
  */
 
-export type PhotoVariant = "thumb" | "preview";
+export type PhotoVariant = "thumb" | "preview" | "tiny";
 
 export const VARIANT_SPECS: Record<PhotoVariant, { folder: string; size: number; quality: number }> = {
   thumb: { folder: "THUMB", size: 480, quality: 68 },
   preview: { folder: "PREVIEW", size: 1600, quality: 80 },
+  tiny: { folder: "TINY", size: 160, quality: 55 },
 };
 
 /** Шлях зменшеної версії або null, якщо це не JPEG-оригінал. */
@@ -39,6 +42,8 @@ type StorageLike = {
 /**
  * Підписані URL однією пачкою: для кожного оригіналу — версія `variant`,
  * а якщо її ще нема — сам оригінал. Повертає Map(шлях оригіналу -> URL).
+ * Для "tiny" запасний варіант — thumb і НІКОЛИ не оригінал: tiny віддається
+ * саме тоді, коли якісні копії батькам показувати не можна.
  */
 export async function signPhotoUrls(
   client: StorageLike,
@@ -51,7 +56,11 @@ export async function signPhotoUrls(
   if (!unique.length) return result;
 
   const wanted = unique.map((p) => (variant === "original" ? p : variantPath(p, variant) ?? p));
-  const toSign = [...new Set([...wanted, ...(variant === "original" ? [] : unique)])];
+  // Запасний шлях, якщо версії ще немає: для tiny — thumb, для решти — оригінал.
+  const fallback = unique.map((p) => (variant === "tiny" ? variantPath(p, "thumb") : p));
+  const toSign = [
+    ...new Set([...wanted, ...(variant === "original" ? [] : fallback.filter((p): p is string => !!p))]),
+  ];
 
   // Storage приймає не більше 1000 шляхів за запит (більше -> помилка на весь
   // запит і жодного URL), тож підписуємо пачками паралельно.
@@ -65,7 +74,8 @@ export async function signPhotoUrls(
   }
 
   unique.forEach((orig, i) => {
-    const url = byPath.get(wanted[i]) ?? byPath.get(orig);
+    const fb = fallback[i];
+    const url = byPath.get(wanted[i]) ?? (fb ? byPath.get(fb) : undefined);
     if (url) result.set(orig, url);
   });
   return result;

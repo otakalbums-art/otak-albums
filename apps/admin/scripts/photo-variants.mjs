@@ -5,6 +5,7 @@
  *
  *   {class}/{category}/JPEG/{name}.JPG  ->  .../THUMB/{name}.webp   (~480 px)
  *                                       ->  .../PREVIEW/{name}.webp (~1600 px)
+ *                                       ->  .../TINY/{name}.webp    (~160 px, коли батькам вимкнено завантаження)
  */
 import sharp from "sharp";
 
@@ -15,6 +16,7 @@ sharp.cache(false);
 export const VARIANT_SPECS = {
   thumb: { folder: "THUMB", size: 480, quality: 68 },
   preview: { folder: "PREVIEW", size: 1600, quality: 80 },
+  tiny: { folder: "TINY", size: 160, quality: 55 },
 };
 
 export function variantPath(storagePath, variant) {
@@ -23,18 +25,18 @@ export function variantPath(storagePath, variant) {
 }
 
 /**
- * Створює й вивантажує thumb і preview для JPEG-оригіналу.
- * Повертає кількість успішно створених версій; помилки не прокидає —
- * без версій галерея просто покаже оригінал.
+ * Створює й вивантажує версії (усі або лише `only`) для JPEG-оригіналу.
+ * `imageBytes` — оригінал або вже зменшена копія (для tiny достатньо thumb).
+ * Повертає кількість успішно створених версій; помилки не прокидає.
  */
-export async function uploadVariants(supabase, storagePath, jpegBytes, log = console.log) {
+export async function uploadVariants(supabase, storagePath, imageBytes, log = console.log, only = Object.keys(VARIANT_SPECS)) {
   let made = 0;
-  for (const variant of Object.keys(VARIANT_SPECS)) {
+  for (const variant of only) {
     const target = variantPath(storagePath, variant);
     if (!target) continue;
     const { size, quality } = VARIANT_SPECS[variant];
     try {
-      const out = await sharp(jpegBytes, { failOn: "none" })
+      const out = await sharp(imageBytes, { failOn: "none" })
         .rotate() // EXIF-орієнтація, інакше вертикальні кадри ляжуть боком
         .resize({ width: size, height: size, fit: "inside", withoutEnlargement: true })
         .webp({ quality })

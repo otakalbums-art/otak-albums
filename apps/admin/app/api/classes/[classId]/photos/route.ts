@@ -96,7 +96,7 @@ export async function DELETE(req: Request, { params }: { params: { classId: stri
 
   // Файли — після рядків: навіть якщо Storage десь не відповість, на платформі фото вже немає.
   const files = photos.flatMap((p) =>
-    [p.storage_path, variantPath(p.storage_path, "thumb"), variantPath(p.storage_path, "preview")].filter(
+    [p.storage_path, variantPath(p.storage_path, "thumb"), variantPath(p.storage_path, "preview"), variantPath(p.storage_path, "tiny")].filter(
       (x): x is string => !!x
     )
   );

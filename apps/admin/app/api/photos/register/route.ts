@@ -54,7 +54,12 @@ export async function POST(req: Request) {
       .update({ storage_path: path, file_type: fileType as never, uploaded_at: new Date().toISOString() })
       .eq("id", previous.id);
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-    const old = [previous.storage_path, variantPath(previous.storage_path, "thumb"), variantPath(previous.storage_path, "preview")];
+    const old = [
+      previous.storage_path,
+      variantPath(previous.storage_path, "thumb"),
+      variantPath(previous.storage_path, "preview"),
+      variantPath(previous.storage_path, "tiny"),
+    ];
     await service.storage.from("photos").remove(old.filter((p): p is string => !!p && p !== path));
   } else {
     const { error } = await service.from("photos").insert({

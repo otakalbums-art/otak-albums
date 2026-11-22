@@ -19,7 +19,7 @@ export async function GET() {
   const supabase = createSupabaseServiceRoleClient();
   const { data: student } = await supabase
     .from("students")
-    .select("id, class_id, selection_confirmed_at, classes(album_type_id, parent_editing_enabled, parent_gallery_enabled)")
+    .select("id, class_id, selection_confirmed_at, classes(album_type_id, parent_editing_enabled, parent_gallery_enabled, parent_download_enabled)")
     .eq("session_token", sessionToken)
     .single();
 
@@ -79,7 +79,12 @@ export async function GET() {
   for (const r of assignedRows ?? []) if ((r as any).photos?.storage_path) paths.add((r as any).photos.storage_path);
   for (const r of favoriteRows ?? []) if ((r as any).photos?.storage_path) paths.add((r as any).photos.storage_path);
   // Мініатюри (~480 px) замість оригіналів — packages/supabase/src/photo-variants.ts.
-  const urlByPath = await signPhotoUrls(supabase, [...paths], "thumb");
+  // Завантаження вимкнено — і тут лише крихітні копії (~160 px), як у галереї.
+  const urlByPath = await signPhotoUrls(
+    supabase,
+    [...paths],
+    (student as any).classes?.parent_download_enabled === false ? "tiny" : "thumb"
+  );
 
   const assignments: Record<string, { id: string; filename: string; url: string | null }[]> = {};
   (assignedRows ?? []).forEach((r: any) => {
