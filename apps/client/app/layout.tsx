@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { SiteNav } from "./site-nav";
+import { ScrollToTop } from "./scroll-to-top";
 
 export const metadata: Metadata = {
   title: "Otak Albums — платформа для випускних фотозйомок",
@@ -29,6 +30,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <SiteNav />
           {children}
         </div>
+        <ScrollToTop />
       </body>
     </html>
   );
