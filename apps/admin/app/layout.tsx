@@ -1,8 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
-import { LogoutButton } from "./logout-button";
-import { NotificationsToggle } from "./notifications-toggle";
-import { InstallAppButton } from "./install-app-button";
+import { AdminShell } from "./admin-shell";
 import { createSupabaseServerClient } from "@otak/supabase/server";
 import { ADMIN_TABS } from "@/lib/admin-tabs";
 import { ensureSchedulerRunning } from "@/lib/push-scheduler";
@@ -50,51 +48,23 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="uk">
       <body className="overflow-x-hidden font-sans text-ink antialiased">
-        <div className="max-w-[1800px] px-3 py-3 sm:px-[22px] sm:py-6">
-          <header className="mb-3 flex items-center gap-[11px] sm:mb-5">
-            {/* eslint-disable-next-line @next/next/no-img-element -- маленьке
-                статичне лого, next/image не використовується більше ніде в
-                застосунку, файл лежить у public/logo.png */}
-            <img src="/logo.png" alt="Otak Albums" className="h-10 w-10 flex-shrink-0 rounded-full object-cover sm:h-[52px] sm:w-[52px]" />
-            <div>
-              <div className="text-[17px] font-bold">Otak Albums</div>
-              <div className="text-xs text-ink-soft">Адмін-панель</div>
-            </div>
-          </header>
+        <div className="max-w-[1800px] px-3 pb-6 md:px-[22px] md:py-6">
           {user ? (
-            <div className="grid gap-3 sm:gap-[18px] md:grid-cols-[200px_1fr]">
-              <nav className="h-fit rounded-2xl border border-line bg-card p-2.5 shadow-card">
-                <div className="mb-2 hidden px-2 text-[10.5px] font-bold uppercase tracking-wider text-ink-soft md:block">
-                  Керування
-                </div>
-                {/* Мобільно — горизонтальна стрічка з прокруткою (меню з 7 пунктів
-                    не має займати весь екран над контентом); від md — звичний
-                    вертикальний список. */}
-                <div className="-mx-2.5 flex gap-1.5 overflow-x-auto px-2.5 pb-0.5 md:mx-0 md:flex-col md:gap-0 md:overflow-visible md:px-0 md:pb-0">
-                  {nav.map((item) => (
-                    <a
-                      key={item.href}
-                      href={item.href}
-                      className="flex-shrink-0 whitespace-nowrap rounded-full border border-line bg-page px-3 py-2 text-[12.5px] font-semibold text-ink hover:border-purple-soft md:block md:flex-shrink md:whitespace-normal md:rounded-lg md:border-0 md:bg-transparent md:px-2.5 md:py-2.5 md:text-[13px] md:hover:bg-page"
-                    >
-                      {item.label}
-                    </a>
-                  ))}
-                </div>
-                <div className="my-1.5 hidden border-t border-line md:block" />
-                {roleName && (
-                  <div className="hidden px-2.5 pb-1 text-[10.5px] text-ink-soft md:block">Роль: {roleName}</div>
-                )}
-                <NotificationsToggle />
-                <InstallAppButton />
-                <div className="mt-1.5 md:mt-0">
-                  <LogoutButton />
-                </div>
-              </nav>
-              <main className="min-w-0">{children}</main>
-            </div>
+            <AdminShell nav={nav} roleName={roleName}>
+              {children}
+            </AdminShell>
           ) : (
-            children
+            <>
+              <header className="mb-5 mt-4 flex items-center gap-[11px] md:mt-0">
+                {/* eslint-disable-next-line @next/next/no-img-element -- маленьке статичне лого з public/logo.png */}
+                <img src="/logo.png" alt="Otak Albums" className="h-[52px] w-[52px] flex-shrink-0 rounded-full object-cover" />
+                <div>
+                  <div className="text-[17px] font-bold">Otak Albums</div>
+                  <div className="text-xs text-ink-soft">Адмін-панель</div>
+                </div>
+              </header>
+              {children}
+            </>
           )}
         </div>
       </body>

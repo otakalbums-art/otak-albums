@@ -470,7 +470,15 @@ function OptionsCell({
 const ADD_STUDENT_CUSTOM_ROLE = "__custom__";
 
 /** Рядок-форма додавання учня внизу таблиці — як новий рядок в Excel. */
-function AddStudentRow({ colSpan, onAdd }: { colSpan: number; onAdd: (firstName: string, lastName: string, staffRole: string | null) => Promise<string | null> }) {
+function AddStudentRow({
+  colSpan,
+  onAdd,
+  asCard = false,
+}: {
+  colSpan: number;
+  onAdd: (firstName: string, lastName: string, staffRole: string | null) => Promise<string | null>;
+  asCard?: boolean;
+}) {
   const [lastName, setLastName] = useState("");
   const [firstName, setFirstName] = useState("");
   const [roleChoice, setRoleChoice] = useState(""); // "" | preset | ADD_STUDENT_CUSTOM_ROLE
@@ -495,10 +503,7 @@ function AddStudentRow({ colSpan, onAdd }: { colSpan: number; onAdd: (firstName:
     setCustomRole("");
   }
 
-  return (
-    <tr className="border-b border-line bg-page/60">
-      <td className="py-2 pr-2 text-ink-soft">+</td>
-      <td className="pr-3" colSpan={2}>
+  const form = (
         <div className="flex flex-wrap items-center gap-1.5">
           <input
             value={lastName}
@@ -542,6 +547,20 @@ function AddStudentRow({ colSpan, onAdd }: { colSpan: number; onAdd: (firstName:
           </button>
           {error && <span className="text-[11px] font-semibold text-warn">{error}</span>}
         </div>
+  );
+  if (asCard) {
+    return (
+      <div className="rounded-xl border border-dashed border-line bg-page p-3">
+        <div className="mb-2 text-[12px] font-bold text-ink-soft">+ Додати дитину або персонал</div>
+        {form}
+      </div>
+    );
+  }
+  return (
+    <tr className="border-b border-line bg-page/60">
+      <td className="py-2 pr-2 text-ink-soft">+</td>
+      <td className="pr-3" colSpan={2}>
+        {form}
       </td>
       <td colSpan={colSpan}></td>
     </tr>
@@ -691,6 +710,141 @@ export function CrmGrid({ classId, title, shootDate }: { classId: string; title:
           else await refetch();
         }}
       />
+      {/* Телефон: кожна дитина — картка з тими самими полями, що й рядок таблиці. */}
+      <div className="flex flex-col gap-3 md:hidden">
+        {students.map((student, i) => {
+          const g = groupForTime(timeGroups, student.shoot_time);
+          const label = "mb-1 text-[10.5px] font-bold uppercase tracking-wide text-ink-soft";
+          return (
+            <div key={student.id} className="overflow-hidden rounded-xl border border-line bg-card">
+              <div className="flex items-start gap-2 border-b border-line p-3" style={g ? { background: tint(g.color, "26") } : undefined}>
+                <span className="mt-1 w-5 text-[12px] text-ink-soft">{i + 1}</span>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[15px] font-bold leading-snug">
+                    {student.last_name} {student.first_name}
+                    {student.staff_role && (
+                      <span className="ml-1.5 rounded-full bg-line px-1.5 py-0.5 align-middle text-[9.5px] font-bold text-ink-soft">
+                        {student.staff_role}
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                    <PersonalLinkButton token={student.access_token} />
+                    {student.face_search_consent_at && (
+                      <span className="inline-flex items-center gap-0.5 rounded-full bg-[#E7F7EE] px-1.5 py-0.5 text-[10px] font-bold text-ok">
+                        <ScanFace className="h-3 w-3" /> згода
+                      </span>
+                    )}
+                    {student.selection_confirmed_at && (
+                      <span className="inline-flex items-center gap-0.5 rounded-full bg-[#E7F7EE] px-1.5 py-0.5 text-[10px] font-bold text-ok">
+                        <Check className="h-2.5 w-2.5" /> відбір підтверджено
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <button
+                  onClick={() => handleDeleteStudent(student.id, `${student.last_name} ${student.first_name}`)}
+                  aria-label="Видалити"
+                  className="p-1.5 text-ink-soft hover:text-warn"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="grid gap-3 p-3">
+                <div className="flex flex-wrap items-end gap-3">
+                  <div>
+                    <div className={label}>Час</div>
+                    <TimeCell
+                      value={student.shoot_time}
+                      group={g}
+                      onSave={(next) => patchStudent(student.id, { shootTime: next })}
+                    />
+                  </div>
+                  {hasSlots && (
+                    <div className="min-w-[120px] flex-1">
+                      <div className={label}>Прогрес</div>
+                      <ProgressBar done={progressByStudent.get(student.id) ?? 0} total={slots.length} />
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <div className={label}>Замовлення</div>
+                  <OrderCell
+                    status={student.order_status}
+                    amount={student.order_amount}
+                    paid={student.paid_amount}
+                    onChange={(status, amount) => saveOrder(student.id, status, amount)}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <div className={label}>Завдаток</div>
+                    <MoneyCell value={student.deposit_amount} onSave={(v) => patchStudent(student.id, { depositAmount: v })} />
+                  </div>
+                  <div>
+                    <div className={label}>Доплата</div>
+                    <MoneyCell
+                      value={student.extra_payment_amount}
+                      onSave={(v) => patchStudent(student.id, { extraPaymentAmount: v })}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <div className={label}>Додатково</div>
+                  <OptionsCell
+                    value={student.options}
+                    catalog={optionCatalog}
+                    onSet={(optionId, quantity) => setStudentOption(student.id, optionId, quantity)}
+                  />
+                </div>
+                {slots.map((slot) => {
+                  const value = student.values[slot.id];
+                  return (
+                    <div key={slot.id}>
+                      <div className={label}>{slot.label}</div>
+                      {slot.kind === "photo" ? (
+                        <PhotoCell
+                          photos={value?.kind === "photo" ? value.photos : []}
+                          onEdit={() => setPickerFor({ studentId: student.id, slot })}
+                        />
+                      ) : (
+                        <TextCell
+                          value={value?.kind === "text" ? value.answer : ""}
+                          filledByStudent={slot.filled_by === "student"}
+                          onSave={(next) => saveAnswer(student.id, slot.id, next)}
+                        />
+                      )}
+                    </div>
+                  );
+                })}
+                {questions.length > 0 && (
+                  <details className="rounded-[10px] bg-page px-3 py-2">
+                    <summary className="cursor-pointer text-[12px] font-bold text-ink-soft">
+                      Анкета ({questions.filter((q) => (student.answers[q.key] ?? "").trim()).length}/{questions.length})
+                    </summary>
+                    <div className="mt-2 grid gap-2.5">
+                      {questions.map((q) => (
+                        <div key={q.key}>
+                          <div className={label}>{q.label}</div>
+                          <TextCell
+                            value={student.answers[q.key] ?? ""}
+                            filledByStudent={false}
+                            onSave={(next) => saveQuestionAnswer(student.id, q.key, next)}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                )}
+              </div>
+            </div>
+          );
+        })}
+        <AddStudentRow colSpan={0} onAdd={handleAddStudent} asCard />
+      </div>
+
+      <div className="hidden md:block">
       <DualScroll>
       <table className="min-w-max border-collapse text-[13px]">
         <thead>
@@ -840,6 +994,7 @@ export function CrmGrid({ classId, title, shootDate }: { classId: string; title:
         </tbody>
       </table>
       </DualScroll>
+      </div>
 
       {students.length === 0 && <p className="mt-4 text-sm text-ink-soft">У класі ще немає учнів — додай нижче.</p>}
 
