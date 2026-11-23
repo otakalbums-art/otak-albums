@@ -268,6 +268,8 @@ function lanIps() {
 }
 
 const DROP_ROOT = path.join(ADMIN_ROOT, ".photo-drop");
+// Стан передач для push «камера не може передати фото» (checkHealth нижче).
+const health = { lastSuccessAt: 0, lastFailAt: 0, lastFailReason: "" };
 fs.mkdirSync(DROP_ROOT, { recursive: true });
 
 // --- увімк/вимк прийому, керовано з адмінки (control-сервер нижче) ---
@@ -344,9 +346,12 @@ ftpServer.on("login", async ({ username, password, connection }, resolve, reject
   // а не після паузи в записі: на повільному Wi-Fi пауза ≠ кінець файлу.
   connection.on("STOR", (error, serverPath) => {
     if (error) {
+      health.lastFailAt = Date.now();
+      health.lastFailReason = error.message;
       log(`[ftp] ✗ передачу перервано (${error.message}) — чекаю повторної спроби камери`);
       return;
     }
+    health.lastSuccessAt = Date.now();
     if (serverPath) enqueue(serverPath);
   });
   resolve({ fs: new GlobAwareFileSystem(connection, { root }) });
@@ -567,6 +572,66 @@ async function cleanupOld(dir = DROP_ROOT) {
 }
 cleanupOld();
 setInterval(cleanupOld, 6 * 60 * 60 * 1000);
+
+// --- push адмінам із сервера камер (через адмінку: /api/push/internal) ---
+// Сам сервер не має VAPID-ключів — просить адмінку розіслати сповіщення,
+// підписуючи запит тим самим FTP_CONTROL_SECRET, яким адмінка керує приймачем.
+const ADMIN_URL = (process.env.ADMIN_URL || "https://admin.otakalbums.online").replace(/\/$/, "");
+async function notifyAdmins(payload) {
+  if (!CONTROL_SECRET) return;
+  try {
+    const res = await fetch(`${ADMIN_URL}/api/push/internal`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${CONTROL_SECRET}` },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) log(`[push] ✗ адмінка відповіла ${res.status}`);
+  } catch (err) {
+    log(`[push] ✗ не вдалося надіслати: ${err.message}`);
+  }
+}
+
+// Пуш 1: камера намагається передати фото, але вони не приймаються (як
+// 21.11, коли закінчився диск: тисячі невдалих спроб і жодного файлу).
+// Пуш 2: на диску сервера закінчується місце.
+const STALL_MIN = 5;
+let stallNotifiedAt = 0;
+let diskNotified = { level: 0, at: 0 };
+function checkHealth() {
+  const now = Date.now();
+  const failingNow = health.lastFailAt && now - health.lastFailAt < 3 * 60_000;
+  const lastOk = Math.max(health.lastSuccessAt, START_TIME);
+  if (enabled && failingNow && now - lastOk > STALL_MIN * 60_000 && now - stallNotifiedAt > 30 * 60_000) {
+    stallNotifiedAt = now;
+    const minutes = Math.round((now - lastOk) / 60_000);
+    notifyAdmins({
+      tab: "ftp",
+      title: "Камера не може передати фото",
+      body: `Уже ${minutes} хв жоден файл не прийнято, хоча камера намагається. Причина: ${health.lastFailReason || "невідома"}`,
+      url: "/ftp-import",
+    });
+  }
+  try {
+    const st = fs.statfsSync(DROP_ROOT);
+    const used = 1 - st.bavail / st.blocks;
+    const level = used >= 0.95 ? 95 : used >= 0.8 ? 80 : 0;
+    // Повідомляємо при переході на вищий рівень і не частіше ніж раз на 6 год на тому ж рівні.
+    if (level && (level > diskNotified.level || now - diskNotified.at > 6 * 3_600_000)) {
+      diskNotified = { level, at: now };
+      const freeGb = ((st.bavail * st.bsize) / 1e9).toFixed(1);
+      notifyAdmins({
+        tab: "ftp",
+        title: level >= 95 ? "Сервер камер: місце майже закінчилось" : "Сервер камер: закінчується місце",
+        body: `Диск заповнено на ${Math.round(used * 100)}%, вільно ${freeGb} ГБ. Без місця камера не зможе передавати фото.`,
+        url: "/ftp-import",
+      });
+    }
+    if (!level) diskNotified = { level: 0, at: 0 };
+  } catch (err) {
+    log(`[health] ✗ не вдалося перевірити диск: ${err.message}`);
+  }
+}
+setInterval(checkHealth, 60_000);
 
 // --- control-сервер: адмінка (Vercel) керує увімк/вимк і читає статус
 // звідси по HTTP, бо сама тримати цей процес не може (serverless).

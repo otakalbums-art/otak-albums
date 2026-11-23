@@ -29,7 +29,8 @@ const g = globalThis as unknown as { __pushScheduler?: SchedulerState };
 if (!g.__pushScheduler) g.__pushScheduler = { intervalHandle: null, lastCheckAt: null };
 const state = g.__pushScheduler;
 
-async function checkMomLinks() {
+/** Одна перевірка — викликають і інтервал нижче, і щоденний Vercel Cron (/api/cron/keepalive). */
+export async function checkMomLinks() {
   const supabase = createSupabaseServiceRoleClient();
   state.lastCheckAt = Date.now();
 

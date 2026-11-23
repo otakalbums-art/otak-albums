@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { notifyAdmins } from "@otak/push";
 import { cookies } from "next/headers";
 import { createSupabaseServiceRoleClient } from "@otak/supabase";
 import { allSlots, broadcastClassChange, hhmm, parseQuestions, parseTimeGroups } from "@otak/supabase/cabinet";
@@ -160,6 +161,19 @@ export async function PUT(req: Request) {
 
   const body = await req.json().catch(() => ({}));
 
+  // Для push адміну: хто, який час був, чи анкета вже заповнювалась.
+  const [{ data: before }, { count: answersBefore }] = await Promise.all([
+    supabase.from("students").select("first_name, last_name, shoot_time").eq("id", studentId).maybeSingle(),
+    supabase
+      .from("student_answers")
+      .select("question_key", { count: "exact", head: true })
+      .eq("student_id", studentId)
+      .neq("answer", ""),
+  ]);
+  const who = before ? `${before.last_name} ${before.first_name}` : "Дитина";
+  const oldTime = hhmm(before?.shoot_time ?? null);
+  const pushes: { title: string; body: string }[] = [];
+
   if (body.shootTime !== undefined) {
     const slots = allSlots(parseTimeGroups(klass.time_groups)).map((s) => s.time);
     if (body.shootTime !== null && !slots.includes(body.shootTime)) {
@@ -173,6 +187,16 @@ export async function PUT(req: Request) {
     if (error) {
       const message = error.code === "23505" ? "Цей час щойно зайняли — оберіть інший" : error.message;
       return NextResponse.json({ error: message }, { status: error.code === "23505" ? 409 : 400 });
+    }
+    const newTime = body.shootTime as string | null;
+    if (newTime !== oldTime) {
+      pushes.push(
+        newTime === null
+          ? { title: "Батьки звільнили час", body: `${who} (${klass.name}) звільнили час ${oldTime}` }
+          : oldTime
+            ? { title: "Батьки змінили час зйомки", body: `${who} (${klass.name}): ${oldTime} → ${newTime}` }
+            : { title: "Батьки обрали час зйомки", body: `${who} (${klass.name}) — ${newTime}` }
+      );
     }
   }
 
@@ -189,9 +213,19 @@ export async function PUT(req: Request) {
     if (rows.length) {
       const { error } = await supabase.from("student_answers").upsert(rows);
       if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+      // Лише перше заповнення — без push на кожне виправлення відповіді.
+      const filled = rows.filter((r) => r.answer.trim()).length;
+      if (!answersBefore && filled) {
+        pushes.push({ title: "Батьки заповнили анкету", body: `${who} (${klass.name}) — відповідей: ${filled}` });
+      }
     }
   }
 
   await broadcastClassChange(klass.id);
+  for (const p of pushes) {
+    await notifyAdmins(supabase, { tab: "crm", ...p, url: `/classes/${klass.id}/crm` }).catch((err) =>
+      console.error("[push] cabinet:", err)
+    );
+  }
   return NextResponse.json({ ok: true });
 }

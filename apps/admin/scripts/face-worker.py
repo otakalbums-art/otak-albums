@@ -83,6 +83,85 @@ def now():
     return datetime.now(timezone.utc).isoformat()
 
 
+# --- push адмінам (через адмінку /api/push/internal, як і ftp-ingest.mjs) ---
+ADMIN_URL = (ENV.get("ADMIN_URL") or "https://admin.otakalbums.online").rstrip("/")
+PUSH_SECRET = ENV.get("FTP_CONTROL_SECRET", "")
+QUIET_S = int(os.environ.get("FACE_QUIET_S", str(15 * 60)))  # тиша в класі = зйомку завершено
+
+
+def notify(title, body, url="/", tab="classes"):
+    if not PUSH_SECRET:
+        return
+    data = json.dumps({"tab": tab, "title": title, "body": body, "url": url}).encode()
+    req = urllib.request.Request(
+        f"{ADMIN_URL}/api/push/internal",
+        data=data,
+        method="POST",
+        headers={"Content-Type": "application/json", "Authorization": f"Bearer {PUSH_SECRET}"},
+    )
+    try:
+        urllib.request.urlopen(req, timeout=20).read()
+    except Exception as e:
+        log(f"✗ push: {e}")
+
+
+# Підсумок по класу після зйомки: {class_id: {"last": ts, "n": кадрів, "single": .., "multi": ..}}
+session = {}
+
+
+def frame_no(filename):
+    nums = re.findall(r"\d+", filename)
+    return int(nums[-1]) if nums else None
+
+
+def missing_ranges(class_id):
+    """Пропуски в нумерації JPEG за останню добу: [(від, до), ...]."""
+    since = datetime.fromtimestamp(time.time() - 24 * 3600, timezone.utc).isoformat()
+    rows, start = [], 0
+    while True:
+        q = (f"photos?select=filename&class_id=eq.{class_id}&file_kind=eq.jpeg"
+             f"&uploaded_at=gte.{urllib.parse.quote(since)}&order=id")
+        batch = rest("GET", q, extra={"Range": f"{start}-{start + 999}"}) or []
+        rows += batch
+        if len(batch) < 1000:
+            break
+        start += 1000
+    nums = sorted({n for n in (frame_no(r["filename"]) for r in rows) if n is not None})
+    return [(a + 1, b - 1) for a, b in zip(nums, nums[1:]) if b - a > 1]
+
+
+def class_summaries():
+    """Клас, де вже QUIET_S немає нових фото й усе проаналізовано, — надсилаємо підсумок (пуші 6 і 7)."""
+    t = time.time()
+    for class_id, st in list(session.items()):
+        if t - st["last"] < QUIET_S:
+            continue
+        pending = rest("GET", f"photos?select=id&class_id=eq.{class_id}&file_kind=eq.jpeg&faces_analyzed_at=is.null&limit=1") or []
+        if pending:
+            continue
+        del session[class_id]
+        klass = (rest("GET", f"classes?select=name&id=eq.{class_id}") or [{}])[0]
+        name = klass.get("name", "клас")
+        url = f"/classes/{class_id}/photos"
+        parts = [f"нових фото: {st['n']}"]
+        if st["single"] or st["multi"]:
+            parts.append(f"портретів {st['single']}, групових {st['multi']}")
+        notify(f"Обличчя проаналізовано — {name}", ", ".join(parts).capitalize(), url)
+        try:
+            gaps = missing_ranges(class_id)
+        except Exception as e:
+            log(f"✗ пропуски кадрів: {e}")
+            gaps = []
+        total = sum(b - a + 1 for a, b in gaps)
+        if total >= 3:
+            shown = ", ".join(f"{a}" if a == b else f"{a}–{b}" for a, b in gaps[:5]) + ("…" if len(gaps) > 5 else "")
+            notify(
+                f"Бракує кадрів — {name}",
+                f"Не дійшло ~{total} кадрів ({shown}). Якщо їх не видаляли на камері й не знімали для іншого класу — дозавантажте з картки («Лише нові файли»).",
+                f"/classes/{class_id}/upload",
+            )
+
+
 detector = cv2.FaceDetectorYN.create(
     os.path.join(MODELS, "face_detection_yunet_2023mar.onnx"), "", (320, 320), 0.8, 0.3, 5000
 )
@@ -176,10 +255,17 @@ def process(photo, rules):
             {"photo_id": photo["id"], "class_id": photo["class_id"], "face_index": i, **f} for i, f in enumerate(faces)
         ], {"Prefer": "return=minimal"})
     patch = {"face_count": len(faces), "faces_analyzed_at": now()}
+    st = session.setdefault(photo["class_id"], {"last": 0, "n": 0, "single": 0, "multi": 0})
+    st["last"] = time.time()
+    st["n"] += 1
     moved = None
     if not photo.get("faces_sorted_at"):
         moved = auto_sort(photo, len(faces), rules)
         patch["faces_sorted_at"] = now()
+        if moved and moved == rules.get("single"):
+            st["single"] += 1
+        elif moved and moved == rules.get("multi"):
+            st["multi"] += 1
     rest("PATCH", f"photos?id=eq.{photo['id']}", patch)
     log(f"✓ {photo['filename']}: облич {len(faces)}" + (f" -> {moved}" if moved else ""))
 
@@ -202,6 +288,7 @@ def main():
                     time.sleep(2)
             if len(batch) == BATCH:
                 continue  # є ще — одразу далі
+            class_summaries()
         except Exception as e:
             log(f"✗ цикл: {e}")
         time.sleep(POLL_S)

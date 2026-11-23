@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createSupabaseServiceRoleClient } from "@otak/supabase/server";
+import { checkMomLinks } from "@/lib/push-scheduler";
 
 /**
  * GET /api/cron/keepalive — щоденний пінг бази, щоб безкоштовний проєкт
@@ -29,6 +30,10 @@ export async function GET(req: NextRequest) {
     console.error("[keepalive] Supabase query failed:", error.message);
     return NextResponse.json({ ok: false }, { status: 500 });
   }
+
+  // Заодно — щоденна перевірка «посилання для мам скоро/вже неактивне»: інтервал
+  // у push-scheduler.ts на Vercel ненадійний (функції між запитами «засинають»).
+  await checkMomLinks().catch((err) => console.error("[keepalive] mom-links check:", err));
 
   return NextResponse.json({ ok: true, at: new Date().toISOString() });
 }

@@ -103,7 +103,8 @@ export const config = {
   // App Router-івську favicon-конвенцію app/icon.png тощо) за розширенням:
   // без цього middleware редіректив їх на /login разом з рештою сторінок,
   // тож лого й фавікон були б биті саме на самій /login (де сесії ще нема).
-  // api/cron — виклики Vercel Cron без сесії (роут сам перевіряє CRON_SECRET).
+  // api/cron — виклики Vercel Cron без сесії (роут сам перевіряє CRON_SECRET);
+  // api/push/internal — сповіщення від сервера камер (роут сам перевіряє FTP_CONTROL_SECRET).
   // manifest.webmanifest і sw.js — щоб браузер розпізнав PWA «OA Admin» для встановлення.
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/cron/|manifest\\.webmanifest|sw\\.js|.*\\.(?:png|jpg|jpeg|gif|svg|webp|ico|mjs)$).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/cron/|api/push/internal|manifest\\.webmanifest|sw\\.js|.*\\.(?:png|jpg|jpeg|gif|svg|webp|ico|mjs)$).*)"],
 };
