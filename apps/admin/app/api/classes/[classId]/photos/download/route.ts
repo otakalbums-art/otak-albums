@@ -1,20 +1,22 @@
 import { NextResponse } from "next/server";
-import { Readable } from "stream";
-import archiver from "archiver";
 import { createSupabaseServiceRoleClient } from "@otak/supabase/server";
-import { requireAdmin } from "@/lib/require-admin";
 import { fetchAllRows } from "@otak/supabase/paginate";
+import { loadPhotoCategories } from "@otak/supabase/photo-categories";
+import { requireAdmin } from "@/lib/require-admin";
 
-const KIND_LABEL: Record<string, string> = { all: "усі", jpeg: "jpeg", raw: "raw" };
+/** Без символів, заборонених в іменах файлів/папок Windows і macOS. */
+function safe(name: string) {
+  return name.replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim() || "без назви";
+}
 
 /**
- * GET /api/classes/[classId]/photos/download?kind=all|jpeg|raw&category=all|portrait|...
+ * GET /api/classes/[classId]/photos/download?kind=all|jpeg|raw&category=all|<key>
  *
- * Стрімить zip-архів напряму у відповідь, без збирання всього в пам'яті —
- * archiver дописує файли по одному в міру завантаження з Storage (RAW може
- * важити десятки МБ на кадр, тримати весь клас одразу в пам'яті не варто).
- * `category` — той самий фільтр, що вже обраний у галереї (apps/admin/app/classes/[classId]/photos/photos-gallery.tsx),
- * "all" = усі категорії.
+ * Список файлів для ZIP-архіву галереї класу: { files: [{ path, url }], className }.
+ * Архів пакує БРАУЗЕР (classes/[classId]/photos/zip-download.tsx), тягнучи
+ * файли напряму зі Storage за підписаними посиланнями. Раніше архів
+ * стрімився через функцію Vercel — гігабайти RAW з'їдали ліміт Fast Origin
+ * Transfer безкоштовного тарифу.
  */
 export async function GET(req: Request, { params }: { params: { classId: string } }) {
   const user = await requireAdmin("classes");
@@ -25,56 +27,40 @@ export async function GET(req: Request, { params }: { params: { classId: string 
   const category = searchParams.get("category") ?? "all";
 
   const service = createSupabaseServiceRoleClient();
+  const [{ data: klass }, categories] = await Promise.all([
+    service.from("classes").select("name").eq("id", params.classId).maybeSingle(),
+    loadPhotoCategories(service),
+  ]);
+  const labels = new Map(categories.map((c) => [c.key, safe(c.label)]));
 
-  const { data: klass } = await service.from("classes").select("name").eq("id", params.classId).maybeSingle();
-
-  const photos = await fetchAllRows((from, to) => {
-    let query = service
-      .from("photos")
-      .select("filename, storage_path, category, file_kind")
-      .eq("class_id", params.classId);
-    if (kind !== "all") query = query.eq("file_kind", kind);
-    if (category !== "all") query = query.eq("category", category);
-    return query.order("uploaded_at").order("id").range(from, to);
+  const photos = await fetchAllRows<{ filename: string; storage_path: string; category: string }>((from, to) => {
+    let q = service.from("photos").select("filename, storage_path, category").eq("class_id", params.classId);
+    if (kind !== "all") q = q.eq("file_kind", kind);
+    if (category !== "all") q = q.eq("category", category);
+    return q.order("uploaded_at").order("id").range(from, to);
   });
-  if (!photos || photos.length === 0) {
-    return NextResponse.json({ error: "Немає фото за обраними фільтрами" }, { status: 404 });
+  if (!photos.length) return NextResponse.json({ error: "Немає фото за обраними фільтрами" }, { status: 404 });
+
+  // Підписуємо пачками (ліміт Storage — 1000 шляхів на запит); посилання на 3 год — великі архіви качаються довго.
+  const urlByPath = new Map<string, string>();
+  const paths = [...new Set(photos.map((p) => p.storage_path))];
+  for (let i = 0; i < paths.length; i += 500) {
+    const { data } = await service.storage.from("photos").createSignedUrls(paths.slice(i, i + 500), 60 * 60 * 3);
+    for (const s of data ?? []) if (s.path && s.signedUrl) urlByPath.set(s.path, s.signedUrl);
   }
 
-  const archive = archiver("zip", { zlib: { level: 0 } }); // фото й так стиснені — zip-компресія лише сповільнить
-  archive.on("warning", (err) => console.warn("[photos/download] archiver warning:", err.message));
-  archive.on("error", (err) => console.error("[photos/download] archiver error:", err.message));
+  // Унікальні імена в архіві: «Категорія/R6__0740.JPG», дублікати — «R6__0740-2.JPG».
+  const used = new Set<string>();
+  const files: { path: string; url: string }[] = [];
+  for (const p of photos) {
+    const url = urlByPath.get(p.storage_path);
+    if (!url) continue;
+    const dir = labels.get(p.category) ?? p.category;
+    let name = `${dir}/${p.filename}`;
+    for (let i = 2; used.has(name.toLowerCase()); i++) name = `${dir}/${p.filename.replace(/(\.[^.]+)?$/, `-${i}$1`)}`;
+    used.add(name.toLowerCase());
+    files.push({ path: name, url });
+  }
 
-  // Кладемо файли в архів послідовно (не всі паралельно) — так у пам'яті
-  // одночасно лише один файл, а не весь клас.
-  const usedNames = new Set<string>();
-  (async () => {
-    for (const p of photos) {
-      const { data: blob, error } = await service.storage.from("photos").download(p.storage_path);
-      if (error || !blob) {
-        console.error(`[photos/download] не вдалось завантажити ${p.storage_path}:`, error?.message);
-        continue;
-      }
-      let entryName = `${p.category}/${p.filename}`;
-      let i = 2;
-      while (usedNames.has(entryName)) {
-        entryName = `${p.category}/${p.filename.replace(/(\.[^.]+)$/, `-${i}$1`)}`;
-        i++;
-      }
-      usedNames.add(entryName);
-      archive.append(Buffer.from(await blob.arrayBuffer()), { name: entryName });
-    }
-    archive.finalize();
-  })();
-
-  const className = klass?.name ?? "клас";
-  const fileName = `${className}-${KIND_LABEL[kind] ?? kind}${category !== "all" ? `-${category}` : ""}.zip`;
-
-  return new Response(Readable.toWeb(archive) as ReadableStream, {
-    headers: {
-      "Content-Type": "application/zip",
-      // Кирилиця у filename за RFC 5987 (filename*) + ASCII-фолбек для старих клієнтів.
-      "Content-Disposition": `attachment; filename="photos-${kind}.zip"; filename*=UTF-8''${encodeURIComponent(fileName)}`,
-    },
-  });
+  return NextResponse.json({ files, className: safe(klass?.name ?? "Клас") });
 }

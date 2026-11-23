@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { createHash } from "crypto";
 import { createSupabaseServiceRoleClient } from "@otak/supabase/server";
 import { requireAdmin } from "@/lib/require-admin";
 import { compareFilenamesDesc, signPhotoUrls, variantPath } from "@otak/supabase/photo-variants";
@@ -13,7 +14,7 @@ import { fetchAllRows } from "@otak/supabase/paginate";
  * само, як student-facing /api/photos. Для RAW-файлів signed URL веде на
  * завантаження оригіналу (браузер їх не рендерить), для JPEG — на прев'ю.
  */
-export async function GET(_req: Request, { params }: { params: { classId: string } }) {
+export async function GET(req: Request, { params }: { params: { classId: string } }) {
   const user = await requireAdmin(["classes", "crm"]);
   if (!user) return NextResponse.json({ error: "Доступ заборонено" }, { status: 403 });
 
@@ -34,23 +35,27 @@ export async function GET(_req: Request, { params }: { params: { classId: string
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }
 
-  const paths = (photos ?? []).map((p: any) => p.storage_path);
-  // Сітка — мініатюри, посилання "відкрити" — оригінал (packages/supabase/src/photo-variants.ts).
-  const [thumbByPath, fullByPath] = await Promise.all([
-    signPhotoUrls(service, paths, "thumb"),
-    signPhotoUrls(service, paths, "original"),
-  ]);
+  // Відбиток списку: галерея опитує лише його (?versionOnly=1, кілька байтів)
+  // і тягне повний список з посиланнями тільки коли він змінився — щоб не
+  // витрачати трафік Vercel (Fast Origin Transfer) на однакові відповіді.
+  const hash = createHash("sha1");
+  for (const p of [...photos].sort((a, b) => (a.id < b.id ? -1 : 1))) hash.update(`${p.id}|${p.storage_path}|${p.category}\n`);
+  const version = hash.digest("hex").slice(0, 16);
+  if (new URL(req.url).searchParams.get("versionOnly") === "1") {
+    return NextResponse.json({ version }, { headers: { "Cache-Control": "no-store" } });
+  }
 
-  const mapped = (photos ?? [])
-    .map((p: any) => ({
-      ...p,
-      url: thumbByPath.get(p.storage_path) ?? null,
-      fullUrl: fullByPath.get(p.storage_path) ?? null,
-    }))
+  // Підписуємо лише мініатюри JPEG. Оригінал («Відкрити JPEG», RAW) береться
+  // на вимогу через /api/photos/[id]/download — не тягнемо тисячі зайвих посилань.
+  const jpegPaths = photos.filter((p) => p.file_kind === "jpeg").map((p) => p.storage_path);
+  const thumbByPath = await signPhotoUrls(service, jpegPaths, "thumb");
+
+  const mapped = photos
+    .map((p: any) => ({ ...p, url: p.file_kind === "jpeg" ? thumbByPath.get(p.storage_path) ?? null : null }))
     // За номером кадру, від нових до старих — так само, як у галереї батьків.
     .sort((a: any, b: any) => compareFilenamesDesc(a.filename, b.filename));
 
-  return NextResponse.json({ photos: mapped });
+  return NextResponse.json({ photos: mapped, version });
 }
 
 /**

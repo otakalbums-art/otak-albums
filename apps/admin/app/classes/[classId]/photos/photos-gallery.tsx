@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDownWideNarrow, ArrowUpNarrowWide, Check, Download, FolderOpen, Trash2 } from "lucide-react";
+import { ArrowDownWideNarrow, ArrowUpNarrowWide, Check, FolderOpen, Trash2 } from "lucide-react";
 import { createSupabaseBrowserClient } from "@otak/supabase/browser";
 import { CategoryIcon } from "@/lib/photo-categories";
 import { FaceSortButton } from "@/lib/face-sort-button";
+import { ZipDownload } from "./zip-download";
 import { compareFilenames, compareFilenamesDesc } from "@otak/supabase/photo-variants";
 
 type Photo = {
@@ -16,8 +17,7 @@ type Photo = {
   category: string;
   student_id: string | null;
   uploaded_at: string;
-  url: string | null; // мініатюра для сітки
-  fullUrl: string | null; // оригінал — для "відкрити"
+  url: string | null; // мініатюра для сітки (оригінал — на вимогу через /api/photos/[id]/download)
 };
 
 
@@ -26,6 +26,9 @@ function baseName(filename: string) {
   return filename.replace(/\.[^.]+$/, "").toLowerCase();
 }
 
+
+/** Повний список класу перезавантажується не частіше (див. schedule у PhotosGallery). */
+const MIN_RELOAD_MS = 30_000;
 
 type Shot = {
   key: string;
@@ -159,14 +162,14 @@ function ShotTile({
         </span>
         <div className="flex flex-wrap gap-2">
           {shot.jpeg?.url && (
-            <a href={shot.jpeg.fullUrl ?? shot.jpeg.url} target="_blank" rel="noreferrer" className="text-[11px] font-semibold text-purple hover:underline">
+            <a href={`/api/photos/${shot.jpeg.id}/download?inline=1`} target="_blank" rel="noreferrer" className="text-[11px] font-semibold text-purple hover:underline">
               Відкрити JPEG
             </a>
           )}
           {shot.raws.map((raw) => (
             <a
               key={raw.id}
-              href={raw.url ?? "#"}
+              href={`/api/photos/${raw.id}/download`}
               download={raw.filename}
               className="text-[11px] font-semibold text-purple hover:underline"
             >
@@ -209,6 +212,8 @@ export function PhotosGallery({
   const [live, setLive] = useState(false);
   const loading = useRef(false);
   const reload = useRef<() => void>(() => {});
+  const lastVersion = useRef<string | null>(null);
+  const lastLoadAt = useRef(0);
 
   // Видалення: режим вибору (ключі плиток) або кнопка-кошик на одній плитці.
   const [selecting, setSelecting] = useState(false);
@@ -233,6 +238,8 @@ export function PhotosGallery({
         const res = await fetch(`/api/classes/${classId}/photos`, { cache: "no-store" });
         const data = await res.json();
         if (cancelled) return;
+        lastVersion.current = data.version ?? null;
+        lastLoadAt.current = Date.now();
         const next: Photo[] = data.photos ?? [];
         // Signed URL щоразу новий — для вже показаних фото лишаємо старий, щоб плитки не блимали.
         setPhotos((prev) => {
@@ -242,7 +249,7 @@ export function PhotosGallery({
           return next.map((p) => {
             const seen = known.get(`${p.id}|${p.storage_path}`);
             const sameKind = seen && seen.url?.includes("/THUMB/") === p.url?.includes("/THUMB/");
-            return seen && sameKind ? { ...p, url: seen.url, fullUrl: seen.fullUrl } : p;
+            return seen && sameKind ? { ...p, url: seen.url } : p;
           });
         });
       } finally {
@@ -254,18 +261,32 @@ export function PhotosGallery({
     reload.current = load;
     const supabase = createSupabaseBrowserClient();
     let timer: ReturnType<typeof setTimeout> | undefined;
-    // Камера шле кадри серіями — збираємо їх в одне оновлення.
+    // Камера шле кадри серіями: повний список (сотні посилань) — не частіше
+    // ніж раз на MIN_RELOAD_MS, щоб не витрачати трафік Vercel під час зйомки.
     const schedule = () => {
-      clearTimeout(timer);
-      timer = setTimeout(load, 800);
+      if (timer) return;
+      const wait = Math.max(1500, lastLoadAt.current + MIN_RELOAD_MS - Date.now());
+      timer = setTimeout(() => {
+        timer = undefined;
+        load();
+      }, wait);
     };
+    // Запасна перевірка (якщо realtime обірвався): лише відбиток списку.
+    async function checkVersion() {
+      if (document.visibilityState === "hidden") return;
+      try {
+        const r = await fetch(`/api/classes/${classId}/photos?versionOnly=1`, { cache: "no-store" });
+        const { version } = await r.json();
+        if (version && version !== lastVersion.current) schedule();
+      } catch {}
+    }
     const channel = supabase
       .channel(`admin-photos-${classId}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "photos", filter: `class_id=eq.${classId}` }, schedule)
       // DELETE з фільтром Supabase не доставляє (у події лише id) — слухаємо всі видалення.
       .on("postgres_changes", { event: "DELETE", schema: "public", table: "photos" }, schedule)
       .subscribe((status) => setLive(status === "SUBSCRIBED"));
-    const poll = setInterval(load, 20000);
+    const poll = setInterval(checkVersion, 20000);
 
     return () => {
       cancelled = true;
@@ -433,26 +454,11 @@ export function PhotosGallery({
       {/* Завантаження архівом — з урахуванням обраної вище категорії; тип
           файлів (усі/JPEG/RAW) обирається саме кнопкою, незалежно від
           фільтра "Усі/JPEG/RAW" над плитками (той лише для перегляду). */}
-      <div className="mb-4 flex flex-wrap gap-2">
-        <a
-          href={`/api/classes/${classId}/photos/download?kind=all&category=${category}`}
-          className="inline-flex items-center gap-1 rounded-[9px] border-[1.5px] border-purple bg-purple-pale px-3 py-1.5 text-[12px] font-bold text-purple-deep hover:bg-purple-soft"
-        >
-          <Download className="h-3.5 w-3.5" /> Завантажити все{category !== "all" ? ` (${CATEGORY_LABELS[category]})` : ""}
-        </a>
-        <a
-          href={`/api/classes/${classId}/photos/download?kind=jpeg&category=${category}`}
-          className="inline-flex items-center gap-1 rounded-[9px] border-[1.5px] border-line bg-card px-3 py-1.5 text-[12px] font-bold text-ink hover:border-purple-soft"
-        >
-          <Download className="h-3.5 w-3.5" /> Тільки JPEG
-        </a>
-        <a
-          href={`/api/classes/${classId}/photos/download?kind=raw&category=${category}`}
-          className="inline-flex items-center gap-1 rounded-[9px] border-[1.5px] border-line bg-card px-3 py-1.5 text-[12px] font-bold text-ink hover:border-purple-soft"
-        >
-          <Download className="h-3.5 w-3.5" /> Тільки RAW
-        </a>
-      </div>
+      <ZipDownload
+        classId={classId}
+        category={category}
+        categoryLabel={category !== "all" ? CATEGORY_LABELS[category] ?? category : null}
+      />
 
       <FaceSortButton classId={classId} />
 

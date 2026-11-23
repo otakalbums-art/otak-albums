@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { downloadZip } from "client-zip";
 import { PhotoTile } from "@otak/ui";
 import { redirectToLogin } from "@/lib/session-redirect";
@@ -17,7 +17,12 @@ type Photo = {
   is_favorite: boolean;
 };
 
-const POLL_MS = 4000;
+// Раз на 5 с питаємо лише відбиток галереї (/api/photos/version — кілька
+// байтів); повний список із підписаними посиланнями — тільки коли відбиток
+// змінився, і примусово раз на 40 хв (посилання діють годину). Прихована
+// вкладка не опитує зовсім. Так відкриті галереї не з'їдають трафік Vercel.
+const POLL_MS = 5000;
+const URL_REFRESH_MS = 40 * 60 * 1000;
 const ZIP_MAX = 500;
 
 /** Назви файлів у ZIP мають бути унікальні: "R6__0740.JPG", "R6__0740 (2).JPG"… */
@@ -71,7 +76,12 @@ export default function GalleryPage() {
   const [categories, setCategories] = useState<{ key: string; label: string }[]>([]);
   const [category, setCategory] = useState<string>("all");
 
+  const lastVersion = useRef<string | null>(null);
+  const urlsFetchedAt = useRef(0);
+
   function refetch() {
+    // Посилання старші за 40 хв — беремо нові для всіх фото (а не лише для нових кадрів).
+    const renewUrls = Date.now() - urlsFetchedAt.current > URL_REFRESH_MS;
     return fetch("/api/photos")
       .then((r) => {
         // Сесія протухла/недійсна (напр. новий логін з того самого акаунту
@@ -85,6 +95,8 @@ export default function GalleryPage() {
       })
       .then((data) => {
         if (!data) return;
+        lastVersion.current = data.version ?? null;
+        if (renewUrls) urlsFetchedAt.current = Date.now();
         // /api/photos видає щоразу НОВИЙ signed URL навіть для тих самих фото
         // (короткоживучі токени) — якщо просто підмінити весь масив, картинка
         // під незмінним <PhotoTile> отримує новий src і перезавантажується
@@ -93,7 +105,7 @@ export default function GalleryPage() {
         // все одно оновлюємо — раптом змінилось з іншого пристрою.
         setPhotos((prev) => {
           // Ключ — id + версія файлу: замінений камерою кадр отримує свіжий URL.
-          const known = new Map(prev.map((p) => [`${p.id}|${p.version}`, p]));
+          const known = renewUrls ? new Map<string, Photo>() : new Map(prev.map((p) => [`${p.id}|${p.version}`, p]));
           return (data.photos ?? []).map((p: Photo) => {
             const seen = known.get(`${p.id}|${p.version}`);
             return seen ? { ...p, thumbnailUrl: seen.thumbnailUrl, previewUrl: seen.previewUrl } : p;
@@ -117,8 +129,23 @@ export default function GalleryPage() {
 
   useEffect(() => {
     refetch();
-    const id = setInterval(refetch, POLL_MS);
-    return () => clearInterval(id);
+    async function check() {
+      if (document.visibilityState === "hidden") return;
+      if (Date.now() - urlsFetchedAt.current > URL_REFRESH_MS) return void refetch();
+      try {
+        const r = await fetch("/api/photos/version", { cache: "no-store" });
+        if (r.status === 401) return redirectToLogin();
+        const { v } = await r.json();
+        if (v && v !== lastVersion.current) refetch();
+      } catch {}
+    }
+    const id = setInterval(check, POLL_MS);
+    const onVisible = () => document.visibilityState === "visible" && check();
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, []);
 
   useEffect(() => {
@@ -147,6 +174,11 @@ export default function GalleryPage() {
   async function toggleFavorite(photoId: string) {
     setPhotos((prev) => prev.map((p) => (p.id === photoId ? { ...p, is_favorite: !p.is_favorite } : p)));
     await fetch(`/api/photos/${photoId}/favorite`, { method: "POST" });
+    // Своя зміна вже показана — запам'ятовуємо новий відбиток, щоб не тягнути весь список заново.
+    try {
+      const { v } = await (await fetch("/api/photos/version", { cache: "no-store" })).json();
+      if (v) lastVersion.current = v;
+    } catch {}
   }
 
   function toggleSelected(photoId: string) {
