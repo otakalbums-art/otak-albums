@@ -132,7 +132,10 @@ class GlobAwareFileSystem extends FileSystem {
       };
       stream.once("finish", () => finish(true));
       stream.once("error", () => finish(false));
-      stream.once("close", () => finish(false));
+      // ftp-srv після передачі сам «закриває» потік (emit close -> end), і 'close'
+      // приходить РАНІШЕ за 'finish' — тому тут лише прибираємо зависле, а
+      // успіх зараховує 'finish'.
+      stream.once("close", () => setTimeout(() => finish(false), 3000));
     }
     return res;
   }

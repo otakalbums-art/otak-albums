@@ -44,7 +44,9 @@ export function TransferProgress({ stats }: { stats: TransferStats | null | unde
             speed > 0 ? "bg-[#E7F7EE] text-ok" : "bg-line text-ink-soft"
           }`}
         >
-          {speed > 0 ? `${(speed / 1_000_000).toFixed(2)} МБ/с` : "0 МБ/с"}
+          {speed > 0
+            ? `${(speed / 1_000_000).toFixed(2)} МБ/с · ${((speed * 8) / 1_000_000).toFixed(1)} Мбіт/с`
+            : "0 МБ/с · 0 Мбіт/с"}
         </span>
       </div>
 
@@ -97,7 +99,8 @@ export function TransferProgress({ stats }: { stats: TransferStats | null | unde
         </span>
       </div>
       <p className="mt-1.5 text-[10.5px] text-ink-soft">
-        Відсоток — оцінка за середнім розміром попередніх файлів (камера не повідомляє розмір наперед).
+        Відсоток — оцінка за середнім розміром попередніх файлів (камера не повідомляє розмір наперед). 1 МБ/с = 8
+        Мбіт/с — тести швидкості на телефоні показують саме Мбіт/с.
       </p>
     </div>
   );
