@@ -80,10 +80,21 @@ let transferSeq = 0;
 function fileKind(name) {
   return /\.jpe?g$/i.test(name) ? "jpeg" : "raw";
 }
+// Прибирає застарілі записи ОДНИМ splice (не shift() у циклі — на сотнях
+// тисяч накопичених записів це O(n²) і вішало приймач 23.11). Викликається
+// і при кожному новому записі (масиви не ростуть без меж, навіть якщо
+// сторінку «Прийом з камер» ніхто не відкриває), і з transferStats().
+function pruneStats(now = Date.now()) {
+  let i = 0;
+  while (i < byteSamples.length && now - byteSamples[i][0] > 10_000) i++;
+  if (i) byteSamples.splice(0, i);
+  let j = 0;
+  while (j < receivedLog.length && now - receivedLog[j].at > 3_600_000) j++;
+  if (j) receivedLog.splice(0, j);
+}
 function transferStats() {
   const now = Date.now();
-  while (byteSamples.length && now - byteSamples[0][0] > 10_000) byteSamples.shift();
-  while (receivedLog.length && now - receivedLog[0].at > 3_600_000) receivedLog.shift();
+  pruneStats(now);
   const window = byteSamples.length ? Math.max(1, (now - byteSamples[0][0]) / 1000) : 1;
   const speedBps = Math.round(byteSamples.reduce((s, [, b]) => s + b, 0) / Math.max(window, 3));
   const lastHour = receivedLog.reduce(
@@ -118,6 +129,7 @@ class GlobAwareFileSystem extends FileSystem {
         const n = chunk?.length ?? 0;
         t.bytes += n;
         byteSamples.push([Date.now(), n]);
+        if (byteSamples.length > 5000) pruneStats();
         return original(chunk, ...rest);
       };
       let done = false;
@@ -127,6 +139,7 @@ class GlobAwareFileSystem extends FileSystem {
         activeTransfers.delete(id);
         if (ok && t.bytes > 0) {
           receivedLog.push({ at: Date.now(), bytes: t.bytes, kind: t.kind });
+          pruneStats();
           avgSize[t.kind] = Math.round(avgSize[t.kind] * 0.8 + t.bytes * 0.2);
         }
       };
