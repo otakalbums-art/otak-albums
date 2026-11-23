@@ -26,7 +26,8 @@ export default async function CrmIndexPage() {
         {!classes || classes.length === 0 ? (
           <p className="text-sm text-ink-soft">Класів ще немає — створіть на вкладці «Класи та папки».</p>
         ) : (
-          <table className="w-full text-[13px]">
+          <div className="-mx-1 overflow-x-auto px-1">
+        <table className="w-full min-w-[560px] text-[13px]">
             <thead>
               <tr className="border-b-[1.5px] border-line text-left text-[11px] font-bold text-ink-soft">
                 <th className="py-2">Клас</th>
@@ -50,6 +51,7 @@ export default async function CrmIndexPage() {
               ))}
             </tbody>
           </table>
+        </div>
         )}
       </Card>
     </div>

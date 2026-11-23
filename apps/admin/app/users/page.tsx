@@ -279,7 +279,8 @@ export default function UsersPage() {
           </div>
         )}
 
-        <table className="w-full text-[13px]">
+        <div className="-mx-1 overflow-x-auto px-1">
+        <table className="w-full min-w-[560px] text-[13px]">
           <thead>
             <tr className="border-b-[1.5px] border-line text-left text-[11px] font-bold text-ink-soft">
               <th className="py-2">Ім'я</th>
@@ -337,6 +338,7 @@ export default function UsersPage() {
             ))}
           </tbody>
         </table>
+        </div>
         {users !== null && users.length === 0 && <p className="mt-3 text-sm text-ink-soft">Користувачів ще немає.</p>}
       </Card>
     </div>

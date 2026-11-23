@@ -1,7 +1,8 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { LogoutButton } from "./logout-button";
 import { NotificationsToggle } from "./notifications-toggle";
+import { InstallAppButton } from "./install-app-button";
 import { createSupabaseServerClient } from "@otak/supabase/server";
 import { ADMIN_TABS } from "@/lib/admin-tabs";
 import { ensureSchedulerRunning } from "@/lib/push-scheduler";
@@ -9,6 +10,15 @@ import { ensureSchedulerRunning } from "@/lib/push-scheduler";
 export const metadata: Metadata = {
   title: "Otak Albums — адмін-панель",
   description: "Керування класами, типами альбомів, посиланнями для мам і бекап-сервером.",
+  applicationName: "OA Admin",
+  // iPhone: назва під іконкою на головному екрані й режим «як застосунок».
+  appleWebApp: { capable: true, title: "OA Admin", statusBarStyle: "default" },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#460464",
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
@@ -40,19 +50,19 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="uk">
       <body className="overflow-x-hidden font-sans text-ink antialiased">
-        <div className="max-w-[1800px] px-[22px] py-6">
-          <header className="mb-5 flex items-center gap-[11px]">
+        <div className="max-w-[1800px] px-3 py-3 sm:px-[22px] sm:py-6">
+          <header className="mb-3 flex items-center gap-[11px] sm:mb-5">
             {/* eslint-disable-next-line @next/next/no-img-element -- маленьке
                 статичне лого, next/image не використовується більше ніде в
                 застосунку, файл лежить у public/logo.png */}
-            <img src="/logo.png" alt="Otak Albums" className="h-[52px] w-[52px] flex-shrink-0 rounded-full object-cover" />
+            <img src="/logo.png" alt="Otak Albums" className="h-10 w-10 flex-shrink-0 rounded-full object-cover sm:h-[52px] sm:w-[52px]" />
             <div>
               <div className="text-[17px] font-bold">Otak Albums</div>
               <div className="text-xs text-ink-soft">Адмін-панель</div>
             </div>
           </header>
           {user ? (
-            <div className="grid gap-[18px] md:grid-cols-[200px_1fr]">
+            <div className="grid gap-3 sm:gap-[18px] md:grid-cols-[200px_1fr]">
               <nav className="h-fit rounded-2xl border border-line bg-card p-2.5 shadow-card">
                 <div className="mb-2 hidden px-2 text-[10.5px] font-bold uppercase tracking-wider text-ink-soft md:block">
                   Керування
@@ -76,6 +86,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                   <div className="hidden px-2.5 pb-1 text-[10.5px] text-ink-soft md:block">Роль: {roleName}</div>
                 )}
                 <NotificationsToggle />
+                <InstallAppButton />
                 <div className="mt-1.5 md:mt-0">
                   <LogoutButton />
                 </div>

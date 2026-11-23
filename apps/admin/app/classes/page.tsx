@@ -36,7 +36,7 @@ export default async function ClassesPage() {
     <div>
       <Card
         title={
-          <div className="flex w-full items-center justify-between">
+          <div className="flex w-full flex-wrap items-center justify-between gap-2">
             <span>Класи та групи садочка</span>
             <a
               href="/classes/categories"
@@ -90,9 +90,76 @@ function StatusCell({ status }: { status: string }) {
   );
 }
 
+/** Телефон/планшет: кожен клас — окрема картка (8 колонок таблиці на вузькому екрані не вміщаються). */
+function ClassCards({ classes }: { classes: any[] }) {
+  if (!classes.length) return <p className="px-1 py-4 text-sm text-ink-soft">Активних класів і груп немає.</p>;
+  return (
+    <div className="flex flex-col gap-3">
+      {classes.map((c: any) => (
+        <div key={c.id} className="rounded-xl border border-line bg-page p-3">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 text-[14px] font-bold">
+              {c.kind === "kindergarten" && (
+                <span className="mr-1.5 inline-flex items-center gap-1 rounded-full bg-[#E3F4EA] px-1.5 py-0.5 align-middle text-[10px] font-bold text-[#1E7B47]">
+                  <Baby className="h-3 w-3" /> садочок
+                </span>
+              )}
+              {c.name}, {c.schools?.name}
+            </div>
+            <StatusCell status={c.status} />
+          </div>
+          <div className="mt-1 text-[12px] text-ink-soft">Фото: <b className="text-ink">{c.photos?.[0]?.count ?? 0}</b></div>
+          <div className="mt-2 min-w-0">
+            <ReferralLinkCell url={`${SITE_URL}/login/${c.referral_code}`} />
+          </div>
+          {c.status !== "archived" && (
+            <div className="mt-2.5 grid gap-1.5 rounded-[10px] bg-card p-2.5">
+              {(
+                [
+                  ["parentEditingEnabled", "Редагування батьками", c.parent_editing_enabled],
+                  ["parentGalleryEnabled", "Перегляд фото", c.parent_gallery_enabled],
+                  ["parentDownloadEnabled", "Завантаження JPEG", c.parent_download_enabled],
+                ] as const
+              ).map(([flag, label, enabled]) => (
+                <div key={flag} className="flex items-center justify-between gap-2 text-[12.5px]">
+                  <span>{label}</span>
+                  <ParentFlagToggle classId={c.id} flag={flag} enabled={enabled} />
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="mt-2.5 flex flex-wrap gap-1.5">
+            {c.status !== "archived" && (
+              <a href={`/classes/${c.id}/upload`} className={chip}>
+                <Upload className="h-3.5 w-3.5" /> Завантажити фото
+              </a>
+            )}
+            <a href={`/classes/${c.id}/photos`} className={chip}>
+              <Images className="h-3.5 w-3.5" /> Фото
+            </a>
+            <a href={`/classes/${c.id}/crm`} className={chip}>
+              <ClipboardList className="h-3.5 w-3.5" /> CRM
+            </a>
+            <ClassRowActions
+              classId={c.id}
+              classLabel={c.name}
+              photoCount={c.photos?.[0]?.count ?? 0}
+              archived={c.status === "archived"}
+            />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function ClassesTable({ classes }: { classes: any[] }) {
   return (
-    <div className="overflow-x-auto">
+    <>
+    <div className="xl:hidden">
+      <ClassCards classes={classes} />
+    </div>
+    <div className="hidden overflow-x-auto xl:block">
       <table className="w-full table-fixed text-[13px]">
         <colgroup>
           <col className="w-[15%]" />
@@ -186,5 +253,6 @@ function ClassesTable({ classes }: { classes: any[] }) {
         </tbody>
       </table>
     </div>
+    </>
   );
 }

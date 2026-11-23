@@ -16,7 +16,7 @@ interface CardProps extends Omit<HTMLAttributes<HTMLDivElement>, "title"> {
 export function Card({ title, period, menu = true, children, className = "", ...rest }: CardProps) {
   return (
     <div
-      className={`relative rounded-[14px] border border-line bg-card p-[18px] shadow-card ${className}`}
+      className={`relative rounded-[14px] border border-line bg-card p-3.5 shadow-card sm:p-[18px] ${className}`}
       {...rest}
     >
       {title && (

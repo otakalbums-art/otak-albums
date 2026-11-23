@@ -162,7 +162,8 @@ export default function MomLinksPage() {
             {creating ? "Створюємо…" : "+ Створити посилання"}
           </Button>
         </div>
-        <table className="w-full text-[13px]">
+        <div className="-mx-1 overflow-x-auto px-1">
+        <table className="w-full min-w-[560px] text-[13px]">
           <thead>
             <tr className="border-b-[1.5px] border-line text-left text-[11px] font-bold text-ink-soft">
               <th className="py-2">Клас / група</th>
@@ -201,6 +202,7 @@ export default function MomLinksPage() {
             ))}
           </tbody>
         </table>
+        </div>
 
         <div className="mt-4 flex flex-wrap items-center justify-between gap-2.5 border-t border-line pt-3.5">
           <div>

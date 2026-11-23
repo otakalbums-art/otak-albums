@@ -80,7 +80,8 @@ export function SlotsEditor({ albumTypeId, initialSlots }: { albumTypeId: string
       {initialSlots.length === 0 ? (
         <p className="text-sm text-ink-soft">Слотів ще немає — додай перший нижче.</p>
       ) : (
-        <table className="w-full text-[13px]">
+        <div className="-mx-1 overflow-x-auto px-1">
+        <table className="w-full min-w-[560px] text-[13px]">
           <thead>
             <tr className="border-b-[1.5px] border-line text-left text-[11px] font-bold text-ink-soft">
               <th className="py-2">Підпис</th>
@@ -112,6 +113,7 @@ export function SlotsEditor({ albumTypeId, initialSlots }: { albumTypeId: string
             ))}
           </tbody>
         </table>
+        </div>
       )}
 
       {!open ? (
